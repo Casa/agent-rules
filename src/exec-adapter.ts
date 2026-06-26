@@ -66,7 +66,10 @@ export function resolveTransport(options: ResolveOptions = {}): ResolvedTranspor
     if (!onPath('codex', env)) {
       throw new Error('--transport codex requested but `codex` was not found on PATH');
     }
-    return { adapter: codexAdapter('codex', options.model, timeoutMs), description: 'codex (pinned)' };
+    return {
+      adapter: codexAdapter('codex', options.model, timeoutMs),
+      description: 'codex (pinned)',
+    };
   }
 
   // 2. Launching-agent context.

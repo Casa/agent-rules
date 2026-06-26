@@ -197,9 +197,9 @@ Both `.md` and `.mdc` extensions are supported and treated identically.
 ---
 description: Safe schema property removal
 globs:
-  - "packages/**/*.schema.ts"
-  - "packages/**/schemas/**/*.ts"
-  - "packages/**/types/**/*.ts"
+  - 'packages/**/*.schema.ts'
+  - 'packages/**/schemas/**/*.ts'
+  - 'packages/**/types/**/*.ts'
 reviewSkip: false
 ---
 
@@ -229,28 +229,30 @@ that expects that field to be present. Deletion must be done in phases.
 Removal must follow a two-phase approach:
 
 **Phase 1 — mark optional and deprecated (deploy first):**
+
 ```ts
 // Before
 const UserSchema = z.object({
-  id:       z.string(),
-  legacyId: z.number(),   // will be removed
-  email:    z.string(),
+  id: z.string(),
+  legacyId: z.number(), // will be removed
+  email: z.string(),
 });
 
 // After phase 1 — consumers can still parse responses that include the field,
 // and responses that omit it will also parse successfully
 const UserSchema = z.object({
-  id:       z.string(),
+  id: z.string(),
   /** @deprecated will be removed in the next release */
   legacyId: z.number().optional(),
-  email:    z.string(),
+  email: z.string(),
 });
 ```
 
 **Phase 2 — remove the field (after all producers have stopped sending it):**
+
 ```ts
 const UserSchema = z.object({
-  id:    z.string(),
+  id: z.string(),
   email: z.string(),
 });
 ```
@@ -258,11 +260,11 @@ const UserSchema = z.object({
 
 ### Front-matter fields
 
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `description` | string | no | filename (sans extension) | Human-readable name used in findings output |
-| `globs` | string or string[] | no | — | Glob patterns controlling which changed files trigger this rule. A rule with no `globs` is never applied. |
-| `reviewSkip` | boolean | no | `false` | If `true`, the rule is parsed but excluded from review |
+| Field         | Type               | Required | Default                   | Description                                                                                               |
+| ------------- | ------------------ | -------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `description` | string             | no       | filename (sans extension) | Human-readable name used in findings output                                                               |
+| `globs`       | string or string[] | no       | —                         | Glob patterns controlling which changed files trigger this rule. A rule with no `globs` is never applied. |
+| `reviewSkip`  | boolean            | no       | `false`                   | If `true`, the rule is parsed but excluded from review                                                    |
 
 ### Glob format
 
@@ -270,35 +272,35 @@ const UserSchema = z.object({
 
 ```yaml
 # inline
-globs: "packages/**/*.ts, packages/**/*.tsx"
+globs: 'packages/**/*.ts, packages/**/*.tsx'
 ```
 
 ```yaml
 # list
 globs:
-  - "packages/**/*.ts"
-  - "packages/**/*.tsx"
+  - 'packages/**/*.ts'
+  - 'packages/**/*.tsx'
 ```
 
 Patterns prefixed with `!` are negations — a file must match at least one positive pattern and no negative pattern to be selected:
 
 ```yaml
 globs:
-  - "src/**/*.ts"
-  - "!src/**/*.test.ts"   # exclude test files
-  - "!src/**/*.spec.ts"
+  - 'src/**/*.ts'
+  - '!src/**/*.test.ts' # exclude test files
+  - '!src/**/*.spec.ts'
 ```
 
 ### Supported glob syntax
 
-| Pattern | Meaning |
-|---|---|
-| `*.ts` | Any file with a `.ts` extension, anywhere |
-| `packages/**/*.ts` | Any `.ts` file anywhere under `packages/` |
-| `packages/**` | Any file anywhere under `packages/` |
-| `src/*` | Files directly inside `src/` (one level only) |
-| `!**/*.test.ts` | Negation — excludes matched files |
-| `exact/path/file.ts` | Exact path match |
+| Pattern              | Meaning                                       |
+| -------------------- | --------------------------------------------- |
+| `*.ts`               | Any file with a `.ts` extension, anywhere     |
+| `packages/**/*.ts`   | Any `.ts` file anywhere under `packages/`     |
+| `packages/**`        | Any file anywhere under `packages/`           |
+| `src/*`              | Files directly inside `src/` (one level only) |
+| `!**/*.test.ts`      | Negation — excludes matched files             |
+| `exact/path/file.ts` | Exact path match                              |
 
 ---
 
@@ -353,9 +355,9 @@ output: applicableRules (ordered list of AgentRule)
 
 ```typescript
 interface AgentRule {
-  name: string;          // from `description`, or filename sans extension
-  content: string;       // Markdown body after the closing ---
-  globs: string[];       // parsed glob patterns
+  name: string; // from `description`, or filename sans extension
+  content: string; // Markdown body after the closing ---
+  globs: string[]; // parsed glob patterns
   reviewSkip?: boolean;
 }
 
@@ -414,10 +416,10 @@ function matchSegment(segment: string, pat: string): boolean {
 
 ```typescript
 function matchGlobs(filePath: string, globs: string[]): boolean {
-  const positive = globs.filter(g => !g.startsWith('!'));
-  const negative = globs.filter(g => g.startsWith('!')).map(g => g.slice(1));
-  if (!positive.some(g => matchGlob(filePath, g))) return false;
-  if (negative.some(g => matchGlob(filePath, g)))  return false;
+  const positive = globs.filter((g) => !g.startsWith('!'));
+  const negative = globs.filter((g) => g.startsWith('!')).map((g) => g.slice(1));
+  if (!positive.some((g) => matchGlob(filePath, g))) return false;
+  if (negative.some((g) => matchGlob(filePath, g))) return false;
   return true;
 }
 ```
@@ -429,10 +431,7 @@ function matchGlobs(filePath: string, globs: string[]): boolean {
 Before invoking the reviewing agent, the full diff is narrowed to only the sections relevant to the current rule. This reduces context size and prevents the agent from commenting on files it has no mandate to review.
 
 ```typescript
-function extractDiffSections(
-  fullDiff: string,
-  matchingPaths: Set<string>,
-): string | null {
+function extractDiffSections(fullDiff: string, matchingPaths: Set<string>): string | null {
   const sections: string[] = [];
   let currentFile: string | null = null;
   let currentSection: string[] = [];
@@ -515,20 +514,20 @@ If no issues are found, respond with exactly: []
 
 ### Severity definitions
 
-| Value | Meaning |
-|---|---|
-| `blocking` | Bugs, security issues, data loss risk, broken contracts, incorrect logic |
+| Value        | Meaning                                                                      |
+| ------------ | ---------------------------------------------------------------------------- |
+| `blocking`   | Bugs, security issues, data loss risk, broken contracts, incorrect logic     |
 | `suggestion` | Style, naming, best-practice improvements that meaningfully improve the code |
-| `nitpick` | Minor or highly subjective preferences |
+| `nitpick`    | Minor or highly subjective preferences                                       |
 
 ### Impact scale
 
-| Range | Meaning |
-|---|---|
-| 10 | Critical — must fix |
-| 7–9 | High value — meaningfully improves correctness, maintainability, or security |
-| 4–6 | Moderate — nice to have |
-| 1–3 | Low — cosmetic or trivial |
+| Range | Meaning                                                                      |
+| ----- | ---------------------------------------------------------------------------- |
+| 10    | Critical — must fix                                                          |
+| 7–9   | High value — meaningfully improves correctness, maintainability, or security |
+| 4–6   | Moderate — nice to have                                                      |
+| 1–3   | Low — cosmetic or trivial                                                    |
 
 ---
 
@@ -538,12 +537,12 @@ The LLM response must be a JSON array. Each element is validated against the `Fi
 
 ```typescript
 interface Finding {
-  path:      string;
-  line:      number;
-  body:      string;
-  ruleName:  string;
-  severity:  'blocking' | 'suggestion' | 'nitpick' | 'ignored';
-  impact:    number;   // 1–10
+  path: string;
+  line: number;
+  body: string;
+  ruleName: string;
+  severity: 'blocking' | 'suggestion' | 'nitpick' | 'ignored';
+  impact: number; // 1–10
 }
 ```
 
@@ -552,12 +551,12 @@ Expressed as a Zod schema for validation:
 ```typescript
 const FindingSchema = z.array(
   z.object({
-    path:      z.string(),
-    line:      z.number().int().positive(),
-    body:      z.string(),
+    path: z.string(),
+    line: z.number().int().positive(),
+    body: z.string(),
     rule_name: z.string().optional(),
-    severity:  z.enum(['blocking', 'suggestion', 'nitpick', 'ignored']).default('suggestion'),
-    impact:    z.number().int().min(1).max(10).default(5),
+    severity: z.enum(['blocking', 'suggestion', 'nitpick', 'ignored']).default('suggestion'),
+    impact: z.number().int().min(1).max(10).default(5),
   }),
 );
 ```
@@ -592,9 +591,9 @@ The caller receives a `ReviewResult` and is responsible for deciding how to pres
 
 ```typescript
 interface ReviewResult {
-  findings:  Finding[];   // filtered, deduplicated, ready to surface
-  ruleCount: number;      // number of rules that were evaluated
-  skipped:   string[];    // rule names skipped (no matching files, reviewSkip, etc.)
+  findings: Finding[]; // filtered, deduplicated, ready to surface
+  ruleCount: number; // number of rules that were evaluated
+  skipped: string[]; // rule names skipped (no matching files, reviewSkip, etc.)
 }
 ```
 
@@ -611,10 +610,18 @@ function buildDiffLineMap(diff: string): Set<string> {
 
   for (const raw of diff.split('\n')) {
     const fileMatch = /^diff --git a\/.*? b\/(.*)/.exec(raw);
-    if (fileMatch) { file = fileMatch[1]; inHunk = false; continue; }
+    if (fileMatch) {
+      file = fileMatch[1];
+      inHunk = false;
+      continue;
+    }
 
     const hunkMatch = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
-    if (hunkMatch) { line = parseInt(hunkMatch[1], 10); inHunk = true; continue; }
+    if (hunkMatch) {
+      line = parseInt(hunkMatch[1], 10);
+      inHunk = true;
+      continue;
+    }
 
     if (!inHunk || raw.startsWith('-')) continue;
 
@@ -669,24 +676,25 @@ The package ships a CLI entrypoint (`agent-rules`) that can be run without writi
 
 Exactly one diff source flag must be provided:
 
-| Flag | Description |
-|---|---|
+| Flag             | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
 | `--working-tree` | Diff of all uncommitted changes (staged + unstaged) against HEAD |
-| `--staged` | Diff of staged changes only (`git diff --cached`) |
-| `--diff <range>` | Arbitrary git diff range, e.g. `origin/main...HEAD` |
+| `--staged`       | Diff of staged changes only (`git diff --cached`)                |
+| `--diff <range>` | Arbitrary git diff range, e.g. `origin/main...HEAD`              |
 
 ### Other flags
 
-| Flag | Default | Description |
-|---|---|---|
-| `--rules <dir>` | `.agent/rules` | Path to the rules directory |
-| `--concurrency <n>` | `3` | Max rules evaluated in parallel |
-| `--min-impact <n>` | `7` | Minimum impact score for suggestions to be included |
-| `--ticket-context <text>` | — | Optional context string included in every rule prompt |
-| `--ticket-context-file <path>` | — | Read ticket context from a file instead of inline |
-| `--output <format>` | `text` | Output format: `text` or `json` |
-| `--exec <command>` | — | Override the model transport with an explicit command (see below) |
-| `--model <name>` | tool default | Model passed to the resolved agent executable |
+| Flag                           | Default        | Description                                                               |
+| ------------------------------ | -------------- | ------------------------------------------------------------------------- |
+| `--rules <dir>`                | `.agent/rules` | Path to the rules directory                                               |
+| `--concurrency <n>`            | `3`            | Max rules evaluated in parallel                                           |
+| `--min-impact <n>`             | `7`            | Minimum impact score for suggestions to be included                       |
+| `--ticket-context <text>`      | —              | Optional context string included in every rule prompt                     |
+| `--ticket-context-file <path>` | —              | Read ticket context from a file instead of inline                         |
+| `--output <format>`            | `text`         | Output format: `text` or `json`                                           |
+| `--exec <command>`             | —              | Override the model transport with an explicit command (see below)         |
+| `--transport <claude\|codex>`  | —              | Pin which installed agent profile to use (bypasses context/PATH ordering) |
+| `--model <name>`               | tool default   | Model passed to the resolved agent executable                             |
 
 ### Model transport (CLI)
 
@@ -701,6 +709,9 @@ The executable is resolved in this order; the first match wins:
 ```
 1. --exec "<command>"        Explicit override. Any command that reads a prompt on
                              stdin and writes the answer to stdout. Highest precedence.
+
+1b. --transport claude|codex Pin a specific built-in profile (e.g. when both agents
+                             are installed). Skips context/PATH ordering below.
 
 2. Launching-agent context   If invoked from within an agent session, reuse that agent.
                              Detected via env markers, e.g. $CLAUDE_CODE_EXECPATH (exact
@@ -724,10 +735,10 @@ error: no model transport available.
 
 For recognised executables the CLI applies a small built-in invocation profile so the agent returns a clean, tool-free completion (the prompt already inlines the scoped diff, so no file access is needed):
 
-| Tool | Invocation (illustrative) | Notes |
-|---|---|---|
-| `claude` | `claude -p --output-format json --disallowedTools <all> [--model <m>]` | Parse the answer from the JSON envelope's `result` field |
-| `codex` | `codex exec --json -s read-only [-m <m>] --output-last-message <tmp>` | `--output-schema` may be used to constrain output to the `Finding` schema |
+| Tool     | Invocation (illustrative)                                              | Notes                                                                     |
+| -------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `claude` | `claude -p --output-format json --disallowedTools <all> [--model <m>]` | Parse the answer from the JSON envelope's `result` field                  |
+| `codex`  | `codex exec --json -s read-only [-m <m>] --output-last-message <tmp>`  | `--output-schema` may be used to constrain output to the `Finding` schema |
 
 `--exec` bypasses profiles entirely: the raw command is run with the prompt on stdin and stdout captured verbatim.
 
@@ -794,21 +805,18 @@ src/schemas/user.ts
 
 ### Exit codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Review completed; no `blocking`-severity findings |
-| `1` | Review completed; one or more `blocking` findings found |
-| `2` | Error — invalid arguments, unreadable rules directory, git command failed, etc. |
+| Code | Meaning                                                                         |
+| ---- | ------------------------------------------------------------------------------- |
+| `0`  | Review completed; no `blocking`-severity findings                               |
+| `1`  | Review completed; one or more `blocking` findings found                         |
+| `2`  | Error — invalid arguments, unreadable rules directory, git command failed, etc. |
 
 ### Diff acquisition (`getDiff`)
 
 The CLI uses `getDiff` internally, which is also exported for programmatic use:
 
 ```typescript
-type DiffSource =
-  | { type: 'working-tree' }
-  | { type: 'staged' }
-  | { type: 'range'; range: string };
+type DiffSource = { type: 'working-tree' } | { type: 'staged' } | { type: 'range'; range: string };
 
 async function getDiff(source: DiffSource, cwd?: string): Promise<string>;
 ```
@@ -827,35 +835,35 @@ const result = await runReview({ diff, rulesDir: '.agent/rules', llm: myAdapter 
 
 ## Requirements summary
 
-| # | Requirement |
-|---|---|
-| R1 | Rule files must be valid UTF-8 Markdown with a YAML front-matter block delimited by `---`. |
-| R2 | Both `.md` and `.mdc` file extensions must be supported. |
-| R3 | Rules must be discovered by recursively walking the rules directory; subdirectories are allowed. |
-| R4 | Rules with `reviewSkip: true` must be excluded from review. |
-| R5 | Rules with no `globs` must be excluded from review. |
-| R6 | A rule is applicable to a diff only if at least one changed file matches its glob patterns. |
-| R7 | Glob patterns must support `**` (recursive), `*` (single-level), and `!` (negation). |
-| R8 | The diff passed to the LLM must be scoped to only the files matched by that rule's globs. |
-| R9 | The LLM must be given only the rule it is evaluating — not all rules at once. |
-| R10 | Multiple rules must be evaluated concurrently, subject to a caller-configurable limit. |
-| R11 | LLM output must be validated against the `Finding` schema before any finding is used. |
-| R12 | Findings must be filtered to lines that exist in the diff (added or context lines only). |
-| R13 | Low-impact suggestions (below caller-configured threshold) must be dropped before returning. |
-| R14 | The package must not hardcode any LLM provider; callers supply an `LLMAdapter`. |
-| R15 | The package must not hardcode any code review platform or git host. |
-| R16 | The package must return findings to the caller; it must not post or store them itself. |
-| R17 | The rules directory path must be a required parameter, not read from an environment variable. |
-| R18 | All behaviour-affecting thresholds (concurrency, impact cutoff, test discount) must be configurable via `RunOptions` with documented defaults. |
-| R19 | The package must ship TypeScript types for all public exports. |
-| R20 | The package must be published as a single, pure-ESM package (`"type": "module"`) targeting Node ≥22. |
-| R21 | The package must ship a `bin` entry (`agent-rules`) invocable via `npx` / `yarn dlx`. |
-| R22 | The CLI must support three mutually exclusive diff sources: `--working-tree`, `--staged`, and `--diff <range>`. |
-| R23 | The CLI must exit with code `0` when no blocking findings are found, `1` when blocking findings are present, and `2` on error. |
-| R24 | The CLI must support `--output json` for machine-readable output and `--output text` (default) for human-readable output. |
-| R25 | `getDiff` must be exported as a standalone function so programmatic callers can acquire a diff without re-implementing git integration. |
-| R26 | The CLI must obtain model responses by delegating to a local agent executable (subprocess), not by calling any model API directly; the package bundles no provider SDKs or API-key handling. |
-| R27 | The CLI must resolve the executable in order: `--exec` override → launching-agent context (env markers) → PATH discovery (`claude`, then `codex`). |
-| R28 | If no executable resolves, the CLI must fail with exit code 2 and actionable guidance. There must be no silent API-key fallback. |
-| R29 | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command. |
+| #   | Requirement                                                                                                                                                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Rule files must be valid UTF-8 Markdown with a YAML front-matter block delimited by `---`.                                                                                                                                   |
+| R2  | Both `.md` and `.mdc` file extensions must be supported.                                                                                                                                                                     |
+| R3  | Rules must be discovered by recursively walking the rules directory; subdirectories are allowed.                                                                                                                             |
+| R4  | Rules with `reviewSkip: true` must be excluded from review.                                                                                                                                                                  |
+| R5  | Rules with no `globs` must be excluded from review.                                                                                                                                                                          |
+| R6  | A rule is applicable to a diff only if at least one changed file matches its glob patterns.                                                                                                                                  |
+| R7  | Glob patterns must support `**` (recursive), `*` (single-level), and `!` (negation).                                                                                                                                         |
+| R8  | The diff passed to the LLM must be scoped to only the files matched by that rule's globs.                                                                                                                                    |
+| R9  | The LLM must be given only the rule it is evaluating — not all rules at once.                                                                                                                                                |
+| R10 | Multiple rules must be evaluated concurrently, subject to a caller-configurable limit.                                                                                                                                       |
+| R11 | LLM output must be validated against the `Finding` schema before any finding is used.                                                                                                                                        |
+| R12 | Findings must be filtered to lines that exist in the diff (added or context lines only).                                                                                                                                     |
+| R13 | Low-impact suggestions (below caller-configured threshold) must be dropped before returning.                                                                                                                                 |
+| R14 | The package must not hardcode any LLM provider; callers supply an `LLMAdapter`.                                                                                                                                              |
+| R15 | The package must not hardcode any code review platform or git host.                                                                                                                                                          |
+| R16 | The package must return findings to the caller; it must not post or store them itself.                                                                                                                                       |
+| R17 | The rules directory path must be a required parameter, not read from an environment variable.                                                                                                                                |
+| R18 | All behaviour-affecting thresholds (concurrency, impact cutoff, test discount) must be configurable via `RunOptions` with documented defaults.                                                                               |
+| R19 | The package must ship TypeScript types for all public exports.                                                                                                                                                               |
+| R20 | The package must be published as a single, pure-ESM package (`"type": "module"`) targeting Node ≥22.                                                                                                                         |
+| R21 | The package must ship a `bin` entry (`agent-rules`) invocable via `npx` / `yarn dlx`.                                                                                                                                        |
+| R22 | The CLI must support three mutually exclusive diff sources: `--working-tree`, `--staged`, and `--diff <range>`.                                                                                                              |
+| R23 | The CLI must exit with code `0` when no blocking findings are found, `1` when blocking findings are present, and `2` on error.                                                                                               |
+| R24 | The CLI must support `--output json` for machine-readable output and `--output text` (default) for human-readable output.                                                                                                    |
+| R25 | `getDiff` must be exported as a standalone function so programmatic callers can acquire a diff without re-implementing git integration.                                                                                      |
+| R26 | The CLI must obtain model responses by delegating to a local agent executable (subprocess), not by calling any model API directly; the package bundles no provider SDKs or API-key handling.                                 |
+| R27 | The CLI must resolve the executable in order: `--exec` override → `--transport` pin → launching-agent context (env markers) → PATH discovery (`claude`, then `codex`).                                                       |
+| R28 | If no executable resolves, the CLI must fail with exit code 2 and actionable guidance. There must be no silent API-key fallback.                                                                                             |
+| R29 | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command.                          |
 | R30 | `runReview` must own no timeout/retry policy (resilience is the `LLMAdapter`'s responsibility) but must isolate per-rule failures: a rejected `run` drops that rule into `ReviewResult.skipped` without aborting the review. |

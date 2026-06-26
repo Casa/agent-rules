@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/banner.svg" alt="agent-rules — Markdown rules, applied to diffs by an agent" width="100%">
+</p>
+
 # Agent Rules
 
 Apply Markdown-defined coding rules to a diff using an LLM.
@@ -9,7 +13,22 @@ findings anchored to specific lines.
 
 The package is **LLM-agnostic** (you supply an adapter, or the CLI delegates to a
 local agent like `claude`/`codex`) and **platform-agnostic** (it returns findings;
-you decide how to surface them).
+you decide how to surface them). It ships as a library (`runReview`, `getDiff`, and
+the building blocks) and a CLI (`agent-rules`).
+
+## Why not just a linter?
+
+A linter only ever sees the code as it exists now, so it's the right tool for
+pattern-matchable facts about the current tree (unused vars, formatting, `console.log`).
+
+agent-rules reviews the **diff** — including removed lines — and reasons about the
+_change_. That makes it suited to things a linter structurally can't catch:
+
+- **Removals** — a deleted authorization check or `try`/`catch` is invisible in the
+  final code; only the diff shows it. (See `examples/rules/`.)
+- **Intent and contracts** — breaking a shared type, dropping a test, semantic review.
+
+Write rules for the change; keep your linter for the snapshot.
 
 ## Install
 
@@ -43,8 +62,9 @@ Use the project logger instead of `console.log` in non-test source files.
 ## CLI
 
 The CLI delegates to a local agent CLI for model access — no API key needed. It
-resolves a transport in order: `--exec` → the launching agent (e.g. `$CLAUDE_CODE_EXECPATH`)
-→ `claude`/`codex` on `PATH`. If none is found it fails (exit 2).
+resolves a transport in order: `--exec` → `--transport <claude|codex>` →
+the launching agent (e.g. `$CLAUDE_CODE_EXECPATH`) → `claude`/`codex` on `PATH`.
+If none is found it fails (exit 2).
 
 ```sh
 # Review uncommitted changes against the default rules dir (.agent/rules)
@@ -53,7 +73,10 @@ agent-rules --working-tree
 # Review a range, emit JSON
 agent-rules --diff origin/main...HEAD --output json
 
-# Force a specific transport (any stdin->stdout command)
+# Pin a specific installed agent
+agent-rules --working-tree --transport codex
+
+# Force an explicit transport command (any stdin->stdout program)
 agent-rules --working-tree --exec "claude -p --output-format json"
 ```
 
