@@ -12,8 +12,14 @@ Branch `feat/agent-rules-package`, managed with **yarn**. `yarn lint`, `yarn typ
 
 - **Done:** M0 scaffolding incl. eslint/prettier (AR-4); M1 rule parsing; M2 glob (incl. multi-`**`); M3 diff (incl. untracked via `--no-index`); M4 prompt + `LLMAdapter`; M5 validation/filter; M6 runner; M7 CLI (`ExecAdapter`, resolution, `claude`/`codex` profiles, `--exec`, help/version); unit tests; `scripts/smoke.sh` (hermetic, AR-76); CI (AR-84); LICENSE + CHANGELOG.
 - **Live transport verification (done):** `scripts/verify-transport.sh` added. Codex verified **end-to-end** (real blocking finding) — needed `--skip-git-repo-check`. Claude profile flags + envelope parsing verified; surfaces `is_error` (e.g. "Not logged in") cleanly. Both fixes committed.
+- **Docker (done):** `Dockerfile` (claude + codex installed), `docker/entrypoint.sh`, `examples/rules/`, `scripts/demo.sh`, `docker/README.md`. Image builds; hermetic smoke passes in-container; a **real codex review ran end-to-end inside Docker** (2 correct findings on the bundled sample). Added `--transport claude|codex` to pin the agent when both are installed.
 - **Partial:** AR-6C (timeout + non-zero/stderr handling done; nested-agent recursion guard not yet).
 - **Pending:** publish workflow (AR-85) + `npm pack` smoke (AR-86); AR-43 (richer adapter examples — basic README done).
+
+### Container credentials (verified)
+
+- **claude:** pass `-e CLAUDE_CODE_OAUTH_TOKEN` at run time (headless OAuth). Never bake into the image.
+- **codex:** mount a **writable** copy of `~/.codex` (`-v copy:/root/.codex`); a read-only mount fails (codex writes runtime files) and a bare `OPENAI_API_KEY` returns 401 against the responses API.
 
 ---
 

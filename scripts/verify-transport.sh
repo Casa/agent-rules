@@ -36,9 +36,9 @@ printf -- '---\ndescription: No console.log\nglobs: "*.ts"\n---\nFlag every use 
   >"$RULES/no-console.md"
 
 echo "Running a real review (this calls a live agent and may take a minute)..."
-echo "Transport will be auto-resolved (--exec to override)."
+echo "Transport auto-resolves; pass extra args to override (e.g. --transport codex)."
 echo
 cd "$REPO"
-node "$CLI" --working-tree --rules "$RULES" --min-impact 1 --output json
+node "$CLI" --working-tree --rules "$RULES" --min-impact 1 --output json "$@"
 echo
 echo "If 'findings' contains the console.log on app.ts, the live transport works."

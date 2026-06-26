@@ -26,6 +26,7 @@ Options:
   --ticket-context-file <p> Read ticket context from a file
   --output <text|json>      Output format (default: text)
   --exec <command>          Override transport (any stdin->stdout command)
+  --transport <claude|codex> Pin which installed agent CLI to use
   --model <name>            Model passed to the resolved agent CLI
   -h, --help                Show this help
   -v, --version             Show version
@@ -45,6 +46,7 @@ async function main(): Promise<number> {
       'ticket-context-file': { type: 'string' },
       output: { type: 'string', default: 'text' },
       exec: { type: 'string' },
+      transport: { type: 'string' },
       model: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
@@ -73,8 +75,12 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  if (values.transport != null && values.transport !== 'claude' && values.transport !== 'codex') {
+    throw new Error(`invalid --transport: ${values.transport} (expected "claude" or "codex")`);
+  }
   const { adapter, description } = resolveTransport({
     exec: values.exec,
+    prefer: values.transport as 'claude' | 'codex' | undefined,
     model: values.model,
   });
   process.stderr.write(`Using transport: ${description}\n`);

@@ -14,6 +14,8 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 export interface ResolveOptions {
   /** Explicit command override (`--exec`). Highest precedence. */
   exec?: string;
+  /** Pin a specific built-in tool profile, bypassing context/PATH ordering. */
+  prefer?: 'claude' | 'codex';
   /** Model name passed to a recognised tool profile. */
   model?: string;
   /** Per-call subprocess timeout in ms. */
@@ -47,6 +49,24 @@ export function resolveTransport(options: ResolveOptions = {}): ResolvedTranspor
       adapter: makeAdapter({ command, args, timeoutMs, interpret: plainStdout }),
       description: `exec: ${options.exec}`,
     };
+  }
+
+  // 1b. Pinned tool profile (`--transport`).
+  if (options.prefer === 'claude') {
+    const command = env.CLAUDE_CODE_EXECPATH || 'claude';
+    if (!env.CLAUDE_CODE_EXECPATH && !onPath('claude', env)) {
+      throw new Error('--transport claude requested but `claude` was not found on PATH');
+    }
+    return {
+      adapter: claudeAdapter(command, options.model, timeoutMs),
+      description: `claude (pinned: ${command})`,
+    };
+  }
+  if (options.prefer === 'codex') {
+    if (!onPath('codex', env)) {
+      throw new Error('--transport codex requested but `codex` was not found on PATH');
+    }
+    return { adapter: codexAdapter('codex', options.model, timeoutMs), description: 'codex (pinned)' };
   }
 
   // 2. Launching-agent context.

@@ -4,6 +4,7 @@
   "description": "Markdown-defined coding rules, applied to diffs by an LLM",
   "type": "module",
   "license": "MIT",
+  "packageManager": "yarn@1.22.22",
   "engines": {
     "node": ">=22"
   },
@@ -30,6 +31,8 @@
     "format:check": "prettier --check .",
     "smoke": "bash scripts/smoke.sh",
     "verify:transport": "bash scripts/verify-transport.sh",
+    "docker:build": "docker build -t agent-rules .",
+    "docker:smoke": "docker run --rm agent-rules",
     "prepublishOnly": "yarn build"
   },
   "keywords": [
