@@ -21,7 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `agent-rules` CLI: exec-only transport delegating to a local agent
   (`claude`/`codex`), resolution order `--exec` → launching agent → PATH → fail,
   text/JSON output, exit codes `0`/`1`/`2`.
-- Hermetic smoke test and a live transport verification script.
+- `--transport claude|codex` flag to pin the agent when both are installed.
+- Recursion guard: refuses to run inside an agent that agent-rules spawned.
+- Docker image (`claude` + `codex` installed) with sample removal rules and a
+  demo; hermetic smoke and packaged-install (`npm pack`) smoke tests.
 
 [Unreleased]: https://example.com/agent-rules/compare/v0.1.0...HEAD
 [0.1.0]: https://example.com/agent-rules/releases/tag/v0.1.0

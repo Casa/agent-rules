@@ -15,8 +15,8 @@ Branch `feat/agent-rules-package`, managed with **yarn**. `yarn lint`, `yarn typ
 - **Docker (done):** `Dockerfile` (claude + codex installed), `docker/entrypoint.sh`, `examples/rules/`, `scripts/demo.sh`, `docker/README.md`. Image builds; hermetic smoke passes in-container; a **real codex review ran end-to-end inside Docker**. Added `--transport claude|codex` to pin the agent when both are installed.
 - **Sample rules are diff-only (removal) rules** (`no-removed-auth-checks`, `no-removed-error-handling`) — things a linter can't catch because deleted code isn't in the tree. The demo diff strips an auth guard + error handling; codex reliably flags the auth removal as blocking. Lint-style samples were dropped.
 - **Anchoring hardening:** removal findings must point at a surviving line (deleted lines have no new-side line number, so a finding anchored to a `-` line is filtered out). The review prompt now explicitly instructs the model to anchor deletion findings to the nearest surviving line.
-- **Partial:** AR-6C (timeout + non-zero/stderr handling done; nested-agent recursion guard not yet).
-- **Pending:** publish workflow (AR-85) + `npm pack` smoke (AR-86); AR-43 (richer adapter examples — basic README done).
+- **Release readiness (done):** AR-6C recursion guard (spawn sets `AGENT_RULES_SUBPROCESS`; CLI refuses if re-entered); AR-86 `scripts/pack-smoke.sh` (packs the tarball, installs it, verifies exports/bin/`files`) wired into CI; AR-85 `.github/workflows/release.yml` (publishes on `v*` tag with provenance).
+- **Pending:** AR-43 (richer adapter examples — basic README done); set npm package name/scope + `NPM_TOKEN` secret before the first publish.
 
 ### Container credentials (verified)
 

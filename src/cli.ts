@@ -63,6 +63,14 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  // Recursion guard: refuse if we are running inside an agent that agent-rules
+  // itself spawned, to avoid an agent -> agent-rules -> agent loop.
+  if (process.env.AGENT_RULES_SUBPROCESS === '1') {
+    throw new Error(
+      'refusing to run: detected agent-rules running inside an agent it spawned (recursion guard)',
+    );
+  }
+
   const source = resolveDiffSource(values);
   if (values.output !== 'text' && values.output !== 'json') {
     throw new Error(`invalid --output: ${String(values.output)} (expected "text" or "json")`);

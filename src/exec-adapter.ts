@@ -206,7 +206,12 @@ function spawnPrompt(
   timeoutMs: number,
 ): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    // Mark the child env so a nested agent that re-invokes agent-rules can detect
+    // and refuse the recursion (see the guard in cli.ts).
+    const child = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, AGENT_RULES_SUBPROCESS: '1' },
+    });
     let stdout = '';
     let stderr = '';
     let settled = false;
