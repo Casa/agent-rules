@@ -24,9 +24,9 @@ The package is LLM-agnostic and platform-agnostic: callers supply their own LLM 
 ### Installation
 
 ```sh
-npm install agent-rules
+npm install @casa/agent-rules
 # or
-yarn add agent-rules
+yarn add @casa/agent-rules
 ```
 
 ### Public exports
@@ -78,7 +78,7 @@ The `package.json` `bin` field registers the CLI command:
 
 ```json
 {
-  "name": "agent-rules",
+  "name": "@casa/agent-rules",
   "bin": {
     "agent-rules": "./dist/cli.js"
   }
@@ -107,7 +107,7 @@ Example: wrapping the Anthropic SDK
 
 ```typescript
 import Anthropic from '@anthropic-ai/sdk';
-import type { LLMAdapter } from 'agent-rules';
+import type { LLMAdapter } from '@casa/agent-rules';
 
 const client = new Anthropic();
 
@@ -128,7 +128,7 @@ Example: wrapping the OpenAI SDK
 
 ```typescript
 import OpenAI from 'openai';
-import type { LLMAdapter } from 'agent-rules';
+import type { LLMAdapter } from '@casa/agent-rules';
 
 const client = new OpenAI();
 
@@ -631,7 +631,7 @@ function buildDiffLineMap(diff: string): Set<string> {
 ## High-level usage
 
 ```typescript
-import { runReview } from 'agent-rules';
+import { runReview } from '@casa/agent-rules';
 import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic();
@@ -816,7 +816,7 @@ async function getDiff(source: DiffSource, cwd?: string): Promise<string>;
 `getDiff` shells out to `git diff` with the appropriate arguments and returns the unified diff string. It throws if the git command fails or if the working directory is not inside a git repository.
 
 ```typescript
-import { getDiff, runReview } from 'agent-rules';
+import { getDiff, runReview } from '@casa/agent-rules';
 
 const diff = await getDiff({ type: 'range', range: 'origin/main...HEAD' });
 

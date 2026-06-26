@@ -46,7 +46,7 @@ mkdir -p "$PROJ"
 
 # Named exports resolve via the exports map.
 exports_ok="$(cd "$PROJ" && node --input-type=module -e '
-  import * as m from "agent-rules";
+  import * as m from "@casa/agent-rules";
   const need = ["runReview","getDiff","matchGlob","matchGlobs","parseRuleFile","buildReviewPrompt","parseFindings"];
   const missing = need.filter((n) => typeof m[n] !== "function");
   process.stdout.write(missing.length ? "missing:" + missing.join(",") : "ok");

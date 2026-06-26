@@ -14,7 +14,7 @@ you decide how to surface them).
 ## Install
 
 ```sh
-yarn add agent-rules
+yarn add @casa/agent-rules
 ```
 
 Requires Node ≥22. Pure ESM.
@@ -64,7 +64,7 @@ findings, `2` error.
 ## Library
 
 ```ts
-import { runReview, getDiff, type LLMAdapter } from 'agent-rules';
+import { runReview, getDiff, type LLMAdapter } from '@casa/agent-rules';
 
 const llm: LLMAdapter = {
   async run(prompt) {

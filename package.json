@@ -1,10 +1,13 @@
 {
-  "name": "agent-rules",
+  "name": "@casa/agent-rules",
   "version": "0.1.0",
   "description": "Markdown-defined coding rules, applied to diffs by an LLM",
   "type": "module",
   "license": "MIT",
   "packageManager": "yarn@1.22.22",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22"
   },
