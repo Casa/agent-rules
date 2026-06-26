@@ -21,16 +21,33 @@ WORK="$(mktemp -d)"
 REPO="$WORK/repo"
 mkdir -p "$REPO"
 git -C "$REPO" init -q
-printf 'export function start() {\n  return true;\n}\n' >"$REPO/server.ts"
+
+# Baseline: a privileged operation protected by an auth guard and error handling.
+cat >"$REPO/account.ts" <<'TS'
+import { db, logger } from './infra.js';
+
+export async function deleteAccount(user, id) {
+  if (!user.isAdmin) {
+    throw new Error('forbidden');
+  }
+  try {
+    return await db.delete(id);
+  } catch (err) {
+    logger.error('delete failed', err);
+    throw err;
+  }
+}
+TS
 git -C "$REPO" -c user.email=demo@demo -c user.name=demo add -A
 git -C "$REPO" -c user.email=demo@demo -c user.name=demo commit -qm init
 
-# A change that trips both sample rules: a console.log and a magic number.
-cat >>"$REPO/server.ts" <<'TS'
+# The change silently strips the authorization guard AND the error handling.
+# Both removals are invisible in the new file — only the diff reveals them.
+cat >"$REPO/account.ts" <<'TS'
+import { db, logger } from './infra.js';
 
-export function poll() {
-  console.log('polling');
-  return setTimeout(poll, 86400000);
+export async function deleteAccount(user, id) {
+  return await db.delete(id);
 }
 TS
 

@@ -40,6 +40,7 @@ export function buildReviewPrompt(rule: AgentRule, diff: string, ticketContext?:
     'For each violation of the rule above that you find in the diff:',
     '1. Identify the exact file path from the diff header (the `b/` path in `diff --git a/... b/...`)',
     '2. Identify the line number in the NEW version of the file (lines starting with `+`, using the line numbers from the `@@` hunk headers)',
+    '   - If the problem is that code was REMOVED (a `-` line), anchor to the nearest surviving line instead: the context line next to the deletion, or the line that replaced it. Removed lines have no line number in the new file and cannot be commented on.',
     '3. Write a concise, actionable comment explaining the issue',
     '4. Classify the severity and impact of the issue',
     '',

@@ -496,6 +496,8 @@ For each violation of the rule above that you find in the diff:
 1. Identify the exact file path from the diff header (the `b/` path in `diff --git a/... b/...`)
 2. Identify the line number in the NEW version of the file (lines starting with `+`,
    using the line numbers from the `@@` hunk headers)
+   - If the problem is REMOVED code (a `-` line), anchor to the nearest surviving line
+     instead — removed lines have no new-side line number and are filtered out.
 3. Write a concise, actionable comment explaining the issue
 4. Classify the severity and impact of the issue
 
