@@ -19,10 +19,7 @@ export function extractChangedFiles(diff: string): string[] {
  * Narrow a unified diff to only the sections for the given file paths.
  * Returns `null` when no section matches.
  */
-export function extractDiffSections(
-  fullDiff: string,
-  matchingPaths: Set<string>,
-): string | null {
+export function extractDiffSections(fullDiff: string, matchingPaths: Set<string>): string | null {
   const sections: string[] = [];
   let currentFile: string | null = null;
   let currentSection: string[] = [];
@@ -114,9 +111,11 @@ async function git(args: string[], cwd: string): Promise<string> {
   } catch (err) {
     const e = err as { code?: string; stderr?: string; message?: string };
     if (e.code === 'ENOENT') {
-      throw new Error('git is not installed or not on PATH');
+      throw new Error('git is not installed or not on PATH', { cause: err });
     }
-    throw new Error(`git ${args.join(' ')} failed: ${(e.stderr || e.message || '').trim()}`);
+    throw new Error(`git ${args.join(' ')} failed: ${(e.stderr || e.message || '').trim()}`, {
+      cause: err,
+    });
   }
 }
 

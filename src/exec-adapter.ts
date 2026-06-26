@@ -65,10 +65,16 @@ export function resolveTransport(options: ResolveOptions = {}): ResolvedTranspor
 
   // 3. PATH discovery.
   if (onPath('claude', env)) {
-    return { adapter: claudeAdapter('claude', options.model, timeoutMs), description: 'claude (PATH)' };
+    return {
+      adapter: claudeAdapter('claude', options.model, timeoutMs),
+      description: 'claude (PATH)',
+    };
   }
   if (onPath('codex', env)) {
-    return { adapter: codexAdapter('codex', options.model, timeoutMs), description: 'codex (PATH)' };
+    return {
+      adapter: codexAdapter('codex', options.model, timeoutMs),
+      description: 'codex (PATH)',
+    };
   }
 
   // 4. No transport.

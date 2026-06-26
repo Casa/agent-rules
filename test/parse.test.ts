@@ -24,7 +24,14 @@ describe('parseFindings', () => {
     ]);
     const out = parseFindings(text, 'my-rule');
     expect(out).toEqual([
-      { path: 'src/a.ts', line: 4, body: 'fix it', ruleName: 'my-rule', severity: 'blocking', impact: 9 },
+      {
+        path: 'src/a.ts',
+        line: 4,
+        body: 'fix it',
+        ruleName: 'my-rule',
+        severity: 'blocking',
+        impact: 9,
+      },
     ]);
   });
 

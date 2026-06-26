@@ -4,11 +4,7 @@ import type { AgentRule } from './types.js';
  * Build the review prompt for a single rule. The scoped diff is inlined; the
  * model is asked to return a JSON array of findings.
  */
-export function buildReviewPrompt(
-  rule: AgentRule,
-  diff: string,
-  ticketContext?: string,
-): string {
+export function buildReviewPrompt(rule: AgentRule, diff: string, ticketContext?: string): string {
   const sections: string[] = [
     'You are a code reviewer. Review code changes against a rule.',
     '',

@@ -43,7 +43,13 @@ describe('runReview', () => {
         Promise.resolve(
           prompt.includes('Rule A')
             ? JSON.stringify([
-                { path: 'src/foo.ts', line: 2, body: 'no magic numbers', severity: 'blocking', impact: 9 },
+                {
+                  path: 'src/foo.ts',
+                  line: 2,
+                  body: 'no magic numbers',
+                  severity: 'blocking',
+                  impact: 9,
+                },
               ])
             : '[]',
         ),
@@ -68,7 +74,9 @@ describe('runReview', () => {
       run: (prompt) => {
         if (prompt.includes('Rule B')) return Promise.reject(new Error('boom'));
         return Promise.resolve(
-          JSON.stringify([{ path: 'src/foo.ts', line: 2, body: 'x', severity: 'blocking', impact: 9 }]),
+          JSON.stringify([
+            { path: 'src/foo.ts', line: 2, body: 'x', severity: 'blocking', impact: 9 },
+          ]),
         );
       },
     };
@@ -76,14 +84,18 @@ describe('runReview', () => {
     const result = await runReview({ rulesDir, diff: DIFF, llm });
 
     expect(result.findings).toHaveLength(1); // Rule A still produced a finding
-    expect(result.skipped).toEqual(expect.arrayContaining([expect.stringContaining('Rule B (error: boom)')]));
+    expect(result.skipped).toEqual(
+      expect.arrayContaining([expect.stringContaining('Rule B (error: boom)')]),
+    );
   });
 
   it('drops findings on lines outside the diff', async () => {
     const llm: LLMAdapter = {
       run: () =>
         Promise.resolve(
-          JSON.stringify([{ path: 'src/foo.ts', line: 999, body: 'x', severity: 'blocking', impact: 9 }]),
+          JSON.stringify([
+            { path: 'src/foo.ts', line: 999, body: 'x', severity: 'blocking', impact: 9 },
+          ]),
         ),
     };
     const result = await runReview({ rulesDir, diff: DIFF, llm });

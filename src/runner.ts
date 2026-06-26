@@ -91,10 +91,10 @@ export async function runReview(options: RunOptions): Promise<ReviewResult> {
     }
   });
 
-  const findings = prioritizeFindings(
-    filterFindingsToDiff(deduplicateFindings(all), validLines),
-    { minSuggestionImpact, testFileImpactDiscount },
-  );
+  const findings = prioritizeFindings(filterFindingsToDiff(deduplicateFindings(all), validLines), {
+    minSuggestionImpact,
+    testFileImpactDiscount,
+  });
 
   return { findings, ruleCount: queue.length, skipped };
 }

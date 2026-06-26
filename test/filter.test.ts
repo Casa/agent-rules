@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  deduplicateFindings,
-  filterFindingsToDiff,
-  prioritizeFindings,
-} from '../src/filter.js';
+import { deduplicateFindings, filterFindingsToDiff, prioritizeFindings } from '../src/filter.js';
 import type { Finding } from '../src/types.js';
 
 function finding(over: Partial<Finding>): Finding {
@@ -55,7 +51,10 @@ describe('prioritizeFindings', () => {
 
   it('drops suggestions below the impact threshold', () => {
     const out = prioritizeFindings(
-      [finding({ severity: 'suggestion', impact: 6 }), finding({ severity: 'suggestion', impact: 7 })],
+      [
+        finding({ severity: 'suggestion', impact: 6 }),
+        finding({ severity: 'suggestion', impact: 7 }),
+      ],
       { minSuggestionImpact: 7 },
     );
     expect(out).toHaveLength(1);

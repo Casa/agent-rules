@@ -27,18 +27,18 @@ Put rules under a directory (e.g. `.agent/rules/`), one per file (`.md` or `.mdc
 ---
 description: No console.log
 globs:
-  - "src/**/*.ts"
-  - "!src/**/*.test.ts"
+  - 'src/**/*.ts'
+  - '!src/**/*.test.ts'
 ---
 
 Use the project logger instead of `console.log` in non-test source files.
 ```
 
-| Field | Description |
-|---|---|
-| `description` | Display name (falls back to the filename) |
-| `globs` | Inline list or YAML list; `!` negates. A rule with no globs is never applied. |
-| `reviewSkip` | If `true`, the rule is parsed but excluded from review |
+| Field         | Description                                                                   |
+| ------------- | ----------------------------------------------------------------------------- |
+| `description` | Display name (falls back to the filename)                                     |
+| `globs`       | Inline list or YAML list; `!` negates. A rule with no globs is never applied. |
+| `reviewSkip`  | If `true`, the rule is parsed but excluded from review                        |
 
 ## CLI
 
@@ -80,7 +80,7 @@ const result = await runReview({
   diff,
   llm,
   minSuggestionImpact: 7, // default
-  concurrency: 3,          // default
+  concurrency: 3, // default
 });
 
 for (const f of result.findings) {

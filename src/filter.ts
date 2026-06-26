@@ -43,7 +43,10 @@ export interface PrioritizeOptions {
  * discount subtracted from their impact before the threshold comparison.
  * `blocking` and `nitpick` findings always pass through.
  */
-export function prioritizeFindings(findings: Finding[], options: PrioritizeOptions = {}): Finding[] {
+export function prioritizeFindings(
+  findings: Finding[],
+  options: PrioritizeOptions = {},
+): Finding[] {
   const minImpact = options.minSuggestionImpact ?? DEFAULT_MIN_SUGGESTION_IMPACT;
   const discount = options.testFileImpactDiscount ?? DEFAULT_TEST_FILE_IMPACT_DISCOUNT;
 
