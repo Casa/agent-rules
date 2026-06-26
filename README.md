@@ -114,6 +114,35 @@ for (const f of result.findings) {
 `runReview` owns no timeout/retry policy — that belongs to your `LLMAdapter`. A
 rejected `run` drops that one rule into `result.skipped` instead of aborting the run.
 
+## Agent integration (slash command)
+
+Add a `/agent-rules` slash command to Claude Code or Codex. The command runs
+`agent-rules --list` to fetch the rules that apply to your current changes, then
+the agent you're already talking to reviews the diff against them. `--list` only
+**discovers** rules — it doesn't call a model — so there's no nested agent, no
+extra cost, and no separate auth.
+
+Templates live in [`examples/integrations/`](./examples/integrations/).
+
+**Claude Code** — copy the command into your project (or `~/.claude/commands/` for all projects):
+
+```sh
+mkdir -p .claude/commands
+cp node_modules/@casa/agent-rules/examples/integrations/claude-code/agent-rules.md .claude/commands/
+# (or copy from this repo if you're not installing the package)
+```
+
+**Codex** — copy the prompt into your Codex prompts directory:
+
+```sh
+mkdir -p ~/.codex/prompts
+cp node_modules/@casa/agent-rules/examples/integrations/codex/agent-rules.md ~/.codex/prompts/
+```
+
+Then run `/agent-rules` in a session. It reviews your working-tree changes against
+the rules in `.agent/rules`. Edit the copied command to change the rules directory
+or the diff source (e.g. `--staged`).
+
 ## Transport notes (CLI)
 
 The CLI delegates to a local agent in headless mode, so the agent must be usable

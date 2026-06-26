@@ -22,7 +22,8 @@
     "agent-rules": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "examples"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

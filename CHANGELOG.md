@@ -23,6 +23,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   text/JSON output, exit codes `0`/`1`/`2`.
 - `--transport claude|codex` flag to pin the agent when both are installed.
 - Recursion guard: refuses to run inside an agent that agent-rules spawned.
+- `--list` mode: discover the rules applicable to a diff without calling a model.
+- Slash-command templates for Claude Code and Codex (`examples/integrations/`) that
+  use `--list` so the host agent does the review without spawning a nested agent.
 - Docker image (`claude` + `codex` installed) with sample removal rules and a
   demo; hermetic smoke and packaged-install (`npm pack`) smoke tests.
 

@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { getDiff } from './diff.js';
+import { extractChangedFiles, getDiff } from './diff.js';
 import { resolveTransport } from './exec-adapter.js';
-import { runReview } from './runner.js';
-import type { DiffSource, Finding, ReviewResult } from './types.js';
+import { discoverApplicableRules, runReview } from './runner.js';
+import type { AgentRule, DiffSource, Finding, ReviewResult } from './types.js';
 
 const USAGE = `agent-rules — apply Markdown-defined coding rules to a diff via a local agent CLI
 
@@ -25,6 +25,8 @@ Options:
   --ticket-context <text>   Extra context injected into each prompt
   --ticket-context-file <p> Read ticket context from a file
   --output <text|json>      Output format (default: text)
+  --list                    List the rules that apply to the diff and exit
+                            (no model call; for editor/agent integrations)
   --exec <command>          Override transport (any stdin->stdout command)
   --transport <claude|codex> Pin which installed agent CLI to use
   --model <name>            Model passed to the resolved agent CLI
@@ -45,6 +47,7 @@ async function main(): Promise<number> {
       'ticket-context': { type: 'string' },
       'ticket-context-file': { type: 'string' },
       output: { type: 'string', default: 'text' },
+      list: { type: 'boolean' },
       exec: { type: 'string' },
       transport: { type: 'string' },
       model: { type: 'string' },
@@ -80,6 +83,20 @@ async function main(): Promise<number> {
   const diff = await getDiff(source);
   if (!diff.trim()) {
     process.stderr.write('No changes to review.\n');
+    return 0;
+  }
+
+  // --list: discover applicable rules and exit. No model call, so this is safe to
+  // run from inside an agent session (editor/slash-command integrations).
+  if (values.list) {
+    const changed = extractChangedFiles(diff);
+    const { rules } = await discoverApplicableRules(values.rules ?? '.agent/rules', changed);
+    if (values.output === 'json') {
+      const payload = rules.map((r) => ({ name: r.name, globs: r.globs, content: r.content }));
+      process.stdout.write(JSON.stringify({ rules: payload }, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatRuleList(rules));
+    }
     return 0;
   }
 
@@ -144,6 +161,19 @@ function parseIntOption(value: unknown, name: string): number | undefined {
   const n = Number.parseInt(String(value), 10);
   if (Number.isNaN(n)) throw new Error(`--${name} must be an integer`);
   return n;
+}
+
+function formatRuleList(rules: AgentRule[]): string {
+  if (rules.length === 0) return 'No applicable rules for these changes.\n';
+  const lines: string[] = [`${rules.length} applicable rule(s):`, ''];
+  for (const r of rules) {
+    lines.push(`## ${r.name}`);
+    lines.push(`globs: ${r.globs.join(', ')}`);
+    lines.push('');
+    lines.push(r.content);
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 function formatText(result: ReviewResult): string {

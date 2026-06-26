@@ -692,6 +692,7 @@ Exactly one diff source flag must be provided:
 | `--ticket-context <text>`      | —              | Optional context string included in every rule prompt                     |
 | `--ticket-context-file <path>` | —              | Read ticket context from a file instead of inline                         |
 | `--output <format>`            | `text`         | Output format: `text` or `json`                                           |
+| `--list`                       | —              | Discover and print the rules applicable to the diff, then exit (no model) |
 | `--exec <command>`             | —              | Override the model transport with an explicit command (see below)         |
 | `--transport <claude\|codex>`  | —              | Pin which installed agent profile to use (bypasses context/PATH ordering) |
 | `--model <name>`               | tool default   | Model passed to the resolved agent executable                             |
@@ -867,3 +868,4 @@ const result = await runReview({ diff, rulesDir: '.agent/rules', llm: myAdapter 
 | R28 | If no executable resolves, the CLI must fail with exit code 2 and actionable guidance. There must be no silent API-key fallback.                                                                                             |
 | R29 | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command.                          |
 | R30 | `runReview` must own no timeout/retry policy (resilience is the `LLMAdapter`'s responsibility) but must isolate per-rule failures: a rejected `run` drops that rule into `ReviewResult.skipped` without aborting the review. |
+| R31 | The CLI must provide a `--list` mode that discovers and prints the rules applicable to the diff without invoking a transport, so editor/agent integrations (slash commands) can fetch rules without spawning a nested agent. |

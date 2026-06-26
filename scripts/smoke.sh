@@ -74,6 +74,12 @@ ln -sf "$(command -v git)" "$BIN/git"
 code=$(cd "$REPO" && env -u CLAUDE_CODE_EXECPATH PATH="$BIN" "$(command -v node)" "$CLI" --working-tree --rules "$RULES" >/dev/null 2>&1; echo $?)
 check "exit code is 2" "2" "$code"
 
+echo "5. --list discovers rules without a transport (no agent on PATH)"
+out="$(cd "$REPO" && env -u CLAUDE_CODE_EXECPATH PATH="$BIN" "$(command -v node)" "$CLI" --working-tree --rules "$RULES" --list --output json)"
+listcode=$(cd "$REPO" && env -u CLAUDE_CODE_EXECPATH PATH="$BIN" "$(command -v node)" "$CLI" --working-tree --rules "$RULES" --list >/dev/null 2>&1; echo $?)
+check "--list exit code is 0" "0" "$listcode"
+check "--list returns the rule" "1" "$(node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).rules.length))' <<<"$out")"
+
 echo
 echo "smoke: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
