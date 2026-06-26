@@ -25,7 +25,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "smoke": "bash scripts/smoke.sh",
+    "verify:transport": "bash scripts/verify-transport.sh",
+    "prepublishOnly": "yarn build"
   },
   "keywords": [
     "code-review",

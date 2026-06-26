@@ -44,7 +44,7 @@ export function resolveTransport(options: ResolveOptions = {}): ResolvedTranspor
     const [command, ...args] = tokenize(options.exec);
     if (!command) throw new Error('--exec was empty');
     return {
-      adapter: makeAdapter({ command, args, timeoutMs, extract: identityExtract }),
+      adapter: makeAdapter({ command, args, timeoutMs, interpret: plainStdout }),
       description: `exec: ${options.exec}`,
     };
   }
@@ -88,13 +88,21 @@ function claudeAdapter(command: string, model: string | undefined, timeoutMs: nu
     command,
     args,
     timeoutMs,
-    // claude --output-format json wraps the answer in a `result` field.
-    extract: (stdout) => {
+    // claude --output-format json wraps the answer in a `result` field and flags
+    // turn-level failures (e.g. "Not logged in") with `is_error: true`.
+    interpret: ({ code, stdout, stderr }) => {
+      let envelope: { result?: unknown; is_error?: boolean } | undefined;
       try {
-        const parsed = JSON.parse(stdout) as { result?: unknown };
-        if (typeof parsed.result === 'string') return parsed.result;
+        envelope = JSON.parse(stdout) as typeof envelope;
       } catch {
-        /* fall through to raw stdout */
+        /* not JSON — fall through */
+      }
+      if (envelope && typeof envelope.result === 'string') {
+        if (envelope.is_error) throw new Error(`claude error: ${envelope.result}`);
+        return envelope.result;
+      }
+      if (code !== 0) {
+        throw new Error(`claude exited ${code ?? 'null'}: ${(stderr || stdout).trim()}`);
       }
       return stdout;
     },
@@ -105,10 +113,21 @@ function codexAdapter(command: string, model: string | undefined, timeoutMs: num
   return {
     async run(prompt: string): Promise<string> {
       const outFile = path.join(tmpdir(), `agent-rules-codex-${process.pid}-${counter()}.txt`);
-      const args = ['exec', '--json', '-s', 'read-only', '--output-last-message', outFile];
+      const args = [
+        'exec',
+        '--json',
+        '-s',
+        'read-only',
+        '--skip-git-repo-check',
+        '--output-last-message',
+        outFile,
+      ];
       if (model) args.push('-m', model);
       try {
-        await spawnPrompt(command, args, prompt, timeoutMs);
+        const { code, stderr } = await spawnPrompt(command, args, prompt, timeoutMs);
+        if (code !== 0) {
+          throw new Error(`codex exited ${code ?? 'null'}: ${stderr.trim()}`);
+        }
         return await readFile(outFile, 'utf8');
       } finally {
         await rm(outFile, { force: true });
@@ -119,31 +138,47 @@ function codexAdapter(command: string, model: string | undefined, timeoutMs: num
 
 // ── Generic subprocess adapter ───────────────────────────────────
 
+interface SpawnResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
 interface AdapterSpec {
   command: string;
   args: string[];
   timeoutMs: number;
-  extract: (stdout: string) => string;
+  /** Turn a completed subprocess into the model's text answer (may throw). */
+  interpret: (result: SpawnResult) => string;
 }
 
 function makeAdapter(spec: AdapterSpec): LLMAdapter {
   return {
     async run(prompt: string): Promise<string> {
-      const stdout = await spawnPrompt(spec.command, spec.args, prompt, spec.timeoutMs);
-      return spec.extract(stdout);
+      const result = await spawnPrompt(spec.command, spec.args, prompt, spec.timeoutMs);
+      return spec.interpret(result);
     },
   };
 }
 
-const identityExtract = (s: string): string => s;
+/** Default interpretation for `--exec`: succeed on exit 0, else throw. */
+function plainStdout({ code, stdout, stderr }: SpawnResult): string {
+  if (code !== 0) throw new Error(`command exited ${code ?? 'null'}: ${stderr.trim()}`);
+  return stdout;
+}
 
-/** Spawn a command, write `prompt` to stdin, resolve with stdout on exit 0. */
+/**
+ * Spawn a command, write `prompt` to stdin, and resolve with the captured
+ * output and exit code. Rejects only on spawn failure or timeout — a non-zero
+ * exit is returned so the caller can inspect stdout (some tools report errors
+ * there).
+ */
 function spawnPrompt(
   command: string,
   args: string[],
   prompt: string,
   timeoutMs: number,
-): Promise<string> {
+): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -171,8 +206,7 @@ function spawnPrompt(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (code === 0) resolve(stdout);
-      else reject(new Error(`${command} exited ${code ?? 'null'}: ${stderr.trim()}`));
+      resolve({ code, stdout, stderr });
     });
 
     child.stdin.end(prompt);

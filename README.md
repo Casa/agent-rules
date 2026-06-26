@@ -14,7 +14,7 @@ you decide how to surface them).
 ## Install
 
 ```sh
-npm install agent-rules
+yarn add agent-rules
 ```
 
 Requires Node ≥22. Pure ESM.
@@ -90,6 +90,29 @@ for (const f of result.findings) {
 
 `runReview` owns no timeout/retry policy — that belongs to your `LLMAdapter`. A
 rejected `run` drops that one rule into `result.skipped` instead of aborting the run.
+
+## Transport notes (CLI)
+
+The CLI delegates to a local agent in headless mode, so the agent must be usable
+non-interactively:
+
+- **claude** must be logged in (`claude /login`). A spawned `claude -p` that isn't
+  authenticated surfaces as a per-rule error in `skipped`.
+- **codex** is invoked with `--skip-git-repo-check` and a read-only sandbox, and
+  authenticates the same way as your interactive `codex`.
+
+If neither resolves (and no `--exec` is given), the CLI exits 2 with guidance.
+
+## Development
+
+```sh
+yarn install
+yarn build            # compile to dist/ (pure ESM + .d.ts)
+yarn typecheck
+yarn test             # 36 unit tests (hermetic)
+yarn smoke            # end-to-end CLI test via a fake transport (hermetic, CI-safe)
+yarn verify:transport # live check against a real claude/codex (manual, makes a model call)
+```
 
 ## License
 
