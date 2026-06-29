@@ -33,7 +33,15 @@ yarn add @casa/agent-rules
 
 ```typescript
 // Types
-export type { AgentRule, Finding, ReviewResult, RunOptions, LLMAdapter };
+export type {
+  AgentRule,
+  Finding,
+  ReviewResult,
+  RunOptions,
+  LLMAdapter,
+  FilterResult,
+  FilterExecutor,
+};
 
 // Rule file utilities
 export { collectRuleFiles, parseRuleFile };
@@ -46,6 +54,9 @@ export { extractChangedFiles, extractDiffSections, buildDiffLineMap };
 
 // Core filtering
 export { deduplicateFindings, filterFindingsToDiff, prioritizeFindings };
+
+// Filter-command execution (default applicability executor)
+export { makeFilterExecutor };
 
 // High-level runner
 export { runReview };
@@ -68,7 +79,8 @@ agent-rules/
 │   ├── diff.ts           ← getDiff, extractChangedFiles, extractDiffSections, buildDiffLineMap
 │   ├── prompt.ts         ← buildReviewPrompt
 │   ├── filter.ts         ← deduplicateFindings, filterFindingsToDiff, prioritizeFindings
-│   ├── runner.ts         ← runReview
+│   ├── filter-exec.ts    ← makeFilterExecutor (default `filter`-command runner)
+│   ├── runner.ts         ← runReview, discoverApplicableRules
 │   └── cli.ts            ← CLI entrypoint (bin)
 ├── package.json
 └── tsconfig.json
@@ -180,6 +192,18 @@ interface RunOptions {
    * comparing against minSuggestionImpact. Default: 2.
    */
   testFileImpactDiscount?: number;
+
+  /** When false, rule `filter` commands are ignored (treated as absent). Default: true. */
+  runFilters?: boolean;
+
+  /** Per-filter subprocess timeout in ms. Default: 10000. */
+  filterTimeoutMs?: number;
+
+  /** Injectable filter executor (for tests / sandboxing). Default: built-in subprocess runner. */
+  filterExecutor?: FilterExecutor;
+
+  /** Working directory in which `filter` commands run. Default: process.cwd(). */
+  cwd?: string;
 }
 ```
 
@@ -260,11 +284,12 @@ const UserSchema = z.object({
 
 ### Front-matter fields
 
-| Field         | Type               | Required | Default                   | Description                                                                                               |
-| ------------- | ------------------ | -------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `description` | string             | no       | filename (sans extension) | Human-readable name used in findings output                                                               |
-| `globs`       | string or string[] | no       | —                         | Glob patterns controlling which changed files trigger this rule. A rule with no `globs` is never applied. |
-| `reviewSkip`  | boolean            | no       | `false`                   | If `true`, the rule is parsed but excluded from review                                                    |
+| Field         | Type               | Required | Default                   | Description                                                                                                                                                                  |
+| ------------- | ------------------ | -------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | string             | no       | filename (sans extension) | Human-readable name used in findings output                                                                                                                                  |
+| `globs`       | string or string[] | no       | —                         | Glob patterns controlling which changed files trigger this rule. A rule with no `globs` is never applied.                                                                    |
+| `reviewSkip`  | boolean            | no       | `false`                   | If `true`, the rule is parsed but excluded from review                                                                                                                       |
+| `filter`      | string             | no       | —                         | A command run after a glob match to decide whether the rule applies. Matched paths are appended as arguments. See "Filter command". Empty or absent ⇒ no second-stage check. |
 
 ### Glob format
 
@@ -342,11 +367,16 @@ output: applicableRules (ordered list of AgentRule)
 
 2. For each collected file:
    a. Read contents.
-   b. Parse front-matter → { description, globs, reviewSkip }.
+   b. Parse front-matter → { description, globs, reviewSkip, filter }.
    c. If reviewSkip === true  → discard, continue.
    d. If globs is empty       → discard, continue.
-   e. For each path in changedFiles:
-        If matchGlobs(path, globs) → add rule to applicableRules, break.
+   e. matched = changedFiles where matchGlobs(path, globs).
+      If matched is empty     → discard, continue.
+   f. If filter is set and filters are enabled, run it against `matched`:
+        pass   → add rule to applicableRules.
+        reject → discard (recorded as "filtered"), continue.
+        error  → add rule to applicableRules (fail-open), record a warning.
+      Otherwise add rule to applicableRules.
 
 3. Return applicableRules.
 ```
@@ -359,7 +389,11 @@ interface AgentRule {
   content: string; // Markdown body after the closing ---
   globs: string[]; // parsed glob patterns
   reviewSkip?: boolean;
+  filter?: string; // optional second-stage applicability command
 }
+
+type FilterResult = 'pass' | 'reject' | 'error';
+type FilterExecutor = (command: string, paths: string[]) => Promise<FilterResult>;
 
 async function collectRuleFiles(dir: string): Promise<string[]>;
 function parseRuleFile(filename: string, raw: string): AgentRule | null;
@@ -423,6 +457,66 @@ function matchGlobs(filePath: string, globs: string[]): boolean {
   return true;
 }
 ```
+
+---
+
+## Filter command
+
+Globs decide applicability by file _path_. The optional `filter` front-matter
+field adds a second stage that can depend on file _content_ or on relationships
+between the changed files. It runs **only** for a rule that already passed the
+glob stage (i.e. at least one changed file matched), **once per rule**, with the
+glob-matched paths appended as command-line arguments.
+
+### Input contract
+
+- **Arguments:** the command string (tokenised with simple `'…'`/`"…"` quoting),
+  followed by the matched changed-file paths in their diff-relative form (no
+  leading `a/`/`b/`). Example: `filter: "rg -q TODO"` over matched files `a.ts`
+  and `b.ts` runs `rg -q TODO a.ts b.ts`.
+- **stdin:** empty (closed immediately).
+- **cwd:** the review working directory (`RunOptions.cwd`, default `process.cwd()`).
+- **env:** inherits the parent environment plus `AGENT_RULES_SUBPROCESS=1`, so a
+  filter that re-invokes `agent-rules` trips the recursion guard.
+- **stdout/stderr:** ignored; only the exit code is consulted.
+
+### Exit-code semantics (grep-style)
+
+| Outcome                                         | `FilterResult` | Effect on the rule                                            |
+| ----------------------------------------------- | -------------- | ------------------------------------------------------------- |
+| exit `0`                                        | `pass`         | Rule applies                                                  |
+| exit `1`                                        | `reject`       | Rule skipped (recorded as `"<name> (filtered)"`)              |
+| exit ≥ `2`                                      | `error`        | Fail-open: rule applies; recorded in `warnings`               |
+| spawn failure (command not found, not runnable) | `error`        | Fail-open: rule applies; recorded in `warnings`               |
+| timeout (`filterTimeoutMs` exceeded)            | `error`        | Fail-open: rule applies; recorded in `warnings`; child killed |
+
+The fail-open behaviour is deliberate: a broken or missing filter must never
+silently suppress a rule. A rule that errored is **applied** and surfaced in
+`ReviewResult.warnings`, which is distinct from `skipped`.
+
+Filters run subject to the same `concurrency` cap as the rest of the review. The
+executor is injectable via `RunOptions.filterExecutor` (the default spawns a
+subprocess), which keeps discovery testable without real processes.
+
+### Caveat: working tree vs. diffed revision
+
+The filter receives _paths_ and runs against files on disk. For `--working-tree`
+/ `--staged` this is the content under review. For `--diff <range>` the on-disk
+files may differ from the diffed blobs; a filter that needs the exact reviewed
+content should query git (e.g. `git grep <range>`) rather than read the working
+tree.
+
+### Trust model
+
+`filter` executes arbitrary commands with the invoking user's privileges — the
+same trust level the rules directory already carries (rule bodies are agent
+instructions; repos already run git hooks and npm scripts). The sharper risk is
+CI reviewing an **untrusted** diff (e.g. a fork PR) that can also add or edit a
+`filter`. Mitigation: pass `--no-filters` (`runFilters: false`) to disable all
+filter execution when the rule set itself is part of the untrusted change, and
+keep the rules directory under the same ownership controls (e.g. `CODEOWNERS`) as
+the rest of the trusted codebase. `--list` executes filters by default so its
+output is accurate; `--no-filters` opts out there too.
 
 ---
 
@@ -593,7 +687,8 @@ The caller receives a `ReviewResult` and is responsible for deciding how to pres
 interface ReviewResult {
   findings: Finding[]; // filtered, deduplicated, ready to surface
   ruleCount: number; // number of rules that were evaluated
-  skipped: string[]; // rule names skipped (no matching files, reviewSkip, etc.)
+  skipped: string[]; // rule names skipped (no matching files, reviewSkip, filtered, etc.)
+  warnings: string[]; // non-fatal notices, e.g. a filter that errored and was applied fail-open
 }
 ```
 
@@ -684,18 +779,20 @@ Exactly one diff source flag must be provided:
 
 ### Other flags
 
-| Flag                           | Default        | Description                                                               |
-| ------------------------------ | -------------- | ------------------------------------------------------------------------- |
-| `--rules <dir>`                | `.agent/rules` | Path to the rules directory                                               |
-| `--concurrency <n>`            | `3`            | Max rules evaluated in parallel                                           |
-| `--min-impact <n>`             | `7`            | Minimum impact score for suggestions to be included                       |
-| `--ticket-context <text>`      | —              | Optional context string included in every rule prompt                     |
-| `--ticket-context-file <path>` | —              | Read ticket context from a file instead of inline                         |
-| `--output <format>`            | `text`         | Output format: `text` or `json`                                           |
-| `--list`                       | —              | Discover and print the rules applicable to the diff, then exit (no model) |
-| `--exec <command>`             | —              | Override the model transport with an explicit command (see below)         |
-| `--transport <claude\|codex>`  | —              | Pin which installed agent profile to use (bypasses context/PATH ordering) |
-| `--model <name>`               | tool default   | Model passed to the resolved agent executable                             |
+| Flag                           | Default        | Description                                                                  |
+| ------------------------------ | -------------- | ---------------------------------------------------------------------------- |
+| `--rules <dir>`                | `.agent/rules` | Path to the rules directory                                                  |
+| `--concurrency <n>`            | `3`            | Max rules evaluated in parallel                                              |
+| `--min-impact <n>`             | `7`            | Minimum impact score for suggestions to be included                          |
+| `--ticket-context <text>`      | —              | Optional context string included in every rule prompt                        |
+| `--ticket-context-file <path>` | —              | Read ticket context from a file instead of inline                            |
+| `--output <format>`            | `text`         | Output format: `text` or `json`                                              |
+| `--list`                       | —              | Discover and print the rules applicable to the diff, then exit (no model)    |
+| `--no-filters`                 | filters on     | Ignore all rule `filter` commands (treat as absent); use for untrusted diffs |
+| `--filter-timeout <ms>`        | `10000`        | Per-filter subprocess timeout                                                |
+| `--exec <command>`             | —              | Override the model transport with an explicit command (see below)            |
+| `--transport <claude\|codex>`  | —              | Pin which installed agent profile to use (bypasses context/PATH ordering)    |
+| `--model <name>`               | tool default   | Model passed to the resolved agent executable                                |
 
 ### Model transport (CLI)
 
@@ -869,3 +966,10 @@ const result = await runReview({ diff, rulesDir: '.agent/rules', llm: myAdapter 
 | R29 | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command.                          |
 | R30 | `runReview` must own no timeout/retry policy (resilience is the `LLMAdapter`'s responsibility) but must isolate per-rule failures: a rejected `run` drops that rule into `ReviewResult.skipped` without aborting the review. |
 | R31 | The CLI must provide a `--list` mode that discovers and prints the rules applicable to the diff without invoking a transport, so editor/agent integrations (slash commands) can fetch rules without spawning a nested agent. |
+| R32 | A rule may declare an optional `filter` front-matter field: a single command string. Absent or empty (after stripping quotes and whitespace) ⇒ no second-stage check.                                                        |
+| R33 | The filter runs only after a rule's globs match at least one changed file, once per rule, with the matched paths appended as command arguments and stdin empty.                                                              |
+| R34 | Filter results follow grep-style exit codes: `0` ⇒ applies; `1` ⇒ skipped (recorded in `skipped`); any other exit, spawn failure, or timeout ⇒ fail-open (applies).                                                          |
+| R35 | Filter errors must never abort the review and must be surfaced as non-fatal `warnings`, distinct from `skipped`.                                                                                                             |
+| R36 | Filter execution must be disableable via `runFilters: false` / `--no-filters`, and bounded by a configurable timeout (`filterTimeoutMs` / `--filter-timeout`, default 10000 ms).                                             |
+| R37 | The filter executor must be injectable (`RunOptions.filterExecutor`) so discovery is testable without real subprocesses; the default spawns with the review `cwd` and the `AGENT_RULES_SUBPROCESS` marker set.               |
+| R38 | `--list` must reflect the post-filter applicable set and honour `--no-filters`; the filter feature must be documented as executing repo-defined commands (trust model).                                                      |

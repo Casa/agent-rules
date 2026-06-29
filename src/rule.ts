@@ -40,6 +40,7 @@ export function parseRuleFile(filename: string, raw: string): AgentRule {
   const globs: string[] = [];
   let description = '';
   let reviewSkip = false;
+  let filter = '';
   let inGlobsList = false;
 
   for (const line of lines.slice(1, closing)) {
@@ -78,6 +79,12 @@ export function parseRuleFile(filename: string, raw: string): AgentRule {
     const skip = /^reviewskip:\s*(.+)$/i.exec(trimmed);
     if (skip) {
       reviewSkip = skip[1]!.trim().toLowerCase() === 'true';
+      continue;
+    }
+
+    const filterMatch = /^filter:\s*(.+)$/i.exec(trimmed);
+    if (filterMatch) {
+      filter = stripQuotes(filterMatch[1]!.trim()).trim();
     }
   }
 
@@ -86,7 +93,9 @@ export function parseRuleFile(filename: string, raw: string): AgentRule {
     .join('\n')
     .trim();
 
-  return { name: description || fallbackName, content, globs, reviewSkip };
+  const rule: AgentRule = { name: description || fallbackName, content, globs, reviewSkip };
+  if (filter) rule.filter = filter;
+  return rule;
 }
 
 /** Read and parse every rule file under `dir`. */

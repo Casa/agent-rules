@@ -80,6 +80,18 @@ listcode=$(cd "$REPO" && env -u CLAUDE_CODE_EXECPATH PATH="$BIN" "$(command -v n
 check "--list exit code is 0" "0" "$listcode"
 check "--list returns the rule" "1" "$(node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).rules.length))' <<<"$out")"
 
+echo "6. filter commands gate applicability (and --no-filters disables them)"
+RULES2="$WORK/rules-filter"
+mkdir -p "$RULES2"
+# Two rules that both match the change; one filter passes (exit 0), one rejects (exit 1).
+printf -- '---\ndescription: Pass\nglobs: "*.ts"\nfilter: "true"\n---\nx\n' >"$RULES2/pass.md"
+printf -- '---\ndescription: Reject\nglobs: "*.ts"\nfilter: "false"\n---\nx\n' >"$RULES2/reject.md"
+count() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).rules.length))'; }
+out="$(cd "$REPO" && node "$CLI" --working-tree --rules "$RULES2" --list --output json)"
+check "filter on: only the passing rule applies" "1" "$(count <<<"$out")"
+out="$(cd "$REPO" && node "$CLI" --working-tree --rules "$RULES2" --list --no-filters --output json)"
+check "--no-filters: both rules apply" "2" "$(count <<<"$out")"
+
 echo
 echo "smoke: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

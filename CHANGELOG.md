@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Optional `filter` front-matter field: a second-stage applicability command run
+  after a rule's globs match, with the matched paths appended as arguments.
+  grep-style exit codes (`0` applies, `1` skips, anything else / timeout / missing
+  command fails open and applies). Disable with `--no-filters` / `runFilters:
+false`; bound with `--filter-timeout` / `filterTimeoutMs` (default 10000 ms).
+  Filter errors surface in the new `ReviewResult.warnings`. New exports:
+  `makeFilterExecutor`, `FilterResult`, `FilterExecutor`, `DiscoverOptions`.
+
 ## [0.1.0] - 2026-06-26
 
 ### Added
