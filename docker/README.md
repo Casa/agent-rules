@@ -15,14 +15,20 @@ docker build -t agent-rules .
 # or: yarn docker:build
 ```
 
-## Hermetic smoke test (no credentials)
+## Hermetic tests (no credentials)
 
-The default command runs `scripts/smoke.sh` — a fake `--exec` transport, so it
-needs no agent login and is safe anywhere (also what CI runs).
+These need no agent login and are safe to run anywhere (also what CI runs).
 
 ```sh
+# End-to-end smoke test (fake --exec transport) — the default command
 docker run --rm agent-rules
 # or: yarn docker:smoke
+
+# Unit test suite (vitest)
+docker run --rm agent-rules test
+
+# Both: unit tests + smoke
+docker run --rm agent-rules check
 ```
 
 ## Live review against a real agent
@@ -65,6 +71,8 @@ docker run --rm \
 
 ## Commands
 
-The entrypoint accepts: `smoke` (default), `verify [args]`, `demo [args]`,
-`cli [args]`, or any other command to exec directly. `verify`/`demo` forward
-extra args to the CLI, e.g. `--transport codex` or `--output json`.
+The entrypoint accepts: `smoke` (default), `test`, `check`, `verify [args]`,
+`demo [args]`, `cli [args]`, or any other command to exec directly. `smoke`,
+`test`, and `check` are hermetic (no credentials); `verify`/`demo` need a real
+agent and forward extra args to the CLI, e.g. `--transport codex` or
+`--output json`.
