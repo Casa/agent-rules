@@ -27,6 +27,9 @@ Options:
   --output <text|json>      Output format (default: text)
   --list                    List the rules that apply to the diff and exit
                             (no model call; for editor/agent integrations)
+  --no-filters              Ignore rule \`filter\` commands (treat as absent).
+                            Use when reviewing untrusted changes.
+  --filter-timeout <ms>     Per-filter subprocess timeout (default: 10000)
   --exec <command>          Override transport (any stdin->stdout command)
   --transport <claude|codex> Pin which installed agent CLI to use
   --model <name>            Model passed to the resolved agent CLI
@@ -48,6 +51,8 @@ async function main(): Promise<number> {
       'ticket-context-file': { type: 'string' },
       output: { type: 'string', default: 'text' },
       list: { type: 'boolean' },
+      'no-filters': { type: 'boolean' },
+      'filter-timeout': { type: 'string' },
       exec: { type: 'string' },
       transport: { type: 'string' },
       model: { type: 'string' },
@@ -86,14 +91,23 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  const runFilters = values['no-filters'] ? false : undefined;
+  const filterTimeoutMs = parseIntOption(values['filter-timeout'], 'filter-timeout');
+
   // --list: discover applicable rules and exit. No model call, so this is safe to
-  // run from inside an agent session (editor/slash-command integrations).
+  // run from inside an agent session (editor/slash-command integrations). Note
+  // that filter commands DO run here unless --no-filters is given.
   if (values.list) {
     const changed = extractChangedFiles(diff);
-    const { rules } = await discoverApplicableRules(values.rules ?? '.agent/rules', changed);
+    const { rules, warnings } = await discoverApplicableRules(
+      values.rules ?? '.agent/rules',
+      changed,
+      { runFilters, filterTimeoutMs },
+    );
+    for (const w of warnings) process.stderr.write(`warning: ${w}\n`);
     if (values.output === 'json') {
       const payload = rules.map((r) => ({ name: r.name, globs: r.globs, content: r.content }));
-      process.stdout.write(JSON.stringify({ rules: payload }, null, 2) + '\n');
+      process.stdout.write(JSON.stringify({ rules: payload, warnings }, null, 2) + '\n');
     } else {
       process.stdout.write(formatRuleList(rules));
     }
@@ -117,8 +131,11 @@ async function main(): Promise<number> {
     llm: adapter,
     concurrency: parseIntOption(values.concurrency, 'concurrency'),
     minSuggestionImpact: parseIntOption(values['min-impact'], 'min-impact'),
+    runFilters,
+    filterTimeoutMs,
   });
 
+  for (const w of result.warnings) process.stderr.write(`warning: ${w}\n`);
   if (values.output === 'json') {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else {

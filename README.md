@@ -53,11 +53,47 @@ globs:
 Use the project logger instead of `console.log` in non-test source files.
 ```
 
-| Field         | Description                                                                   |
-| ------------- | ----------------------------------------------------------------------------- |
-| `description` | Display name (falls back to the filename)                                     |
-| `globs`       | Inline list or YAML list; `!` negates. A rule with no globs is never applied. |
-| `reviewSkip`  | If `true`, the rule is parsed but excluded from review                        |
+| Field         | Description                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | Display name (falls back to the filename)                                                                                                      |
+| `globs`       | Inline list or YAML list; `!` negates. A rule with no globs is never applied.                                                                  |
+| `reviewSkip`  | If `true`, the rule is parsed but excluded from review                                                                                         |
+| `filter`      | Optional command run after a glob match to decide if the rule applies. Matched paths are appended as args. See below. Absent ⇒ no extra check. |
+
+### Filtering beyond globs
+
+Globs match file _paths_. A `filter` command lets a rule also depend on file
+_content_ or relationships between changes. After a rule's globs select the
+changed files, its `filter` runs once with those paths appended as arguments,
+and decides applicability by exit code:
+
+| Exit code                                      | Meaning                                             |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `0`                                            | Filter passed — the rule applies                    |
+| `1`                                            | Clean rejection — the rule is skipped               |
+| anything else, a missing command, or a timeout | Error — fail-open: the rule applies (and is warned) |
+
+```markdown
+---
+description: No raw SQL in repositories
+globs:
+  - 'src/repositories/**/*.ts'
+filter: "grep -ilq 'select \\|insert \\|update '"
+---
+
+Use the query builder, not raw SQL strings, in repository classes.
+```
+
+Here `grep` exits `0` if any matched file contains a SQL keyword (rule applies),
+`1` if none do (skipped). The command can be inline (with flags) or a script;
+see [`examples/filters/`](./examples/filters/) and [`examples/rules/no-raw-sql.md`](./examples/rules/no-raw-sql.md).
+
+> **Filter commands execute with your privileges.** Treat the rules directory as
+> trusted code, like a git hook. When reviewing an untrusted diff (e.g. a fork PR
+> that could edit a `filter`), pass `--no-filters`. Note also that a filter reads
+> files from the working tree — for `--diff <range>` reviews those may differ from
+> the diffed revision, so content filters should query git (`git grep <range>`)
+> rather than read the tree.
 
 ## CLI
 
@@ -78,11 +114,17 @@ agent-rules --working-tree --transport codex
 
 # Force an explicit transport command (any stdin->stdout program)
 agent-rules --working-tree --exec "claude -p --output-format json"
+
+# Review an untrusted diff without executing any rule `filter` commands
+agent-rules --diff origin/main...HEAD --no-filters
 ```
 
 Diff sources (exactly one): `--working-tree`, `--staged`, `--diff <range>`.
 Run `agent-rules --help` for all options. Exit codes: `0` clean, `1` blocking
 findings, `2` error.
+
+Rule `filter` commands run by default (including under `--list`); `--no-filters`
+disables them and `--filter-timeout <ms>` bounds each one (default `10000`).
 
 ## Library
 

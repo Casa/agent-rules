@@ -8,7 +8,24 @@ export interface AgentRule {
   globs: string[];
   /** When `true`, the rule is parsed but excluded from review. */
   reviewSkip?: boolean;
+  /**
+   * Optional second-stage applicability command, run after a glob match. The
+   * glob-matched changed file paths are appended as arguments. Exit `0` ⇒ the
+   * rule applies, `1` ⇒ it is skipped, any other outcome (incl. spawn failure
+   * or timeout) ⇒ fail-open (applies). Absent ⇒ no second-stage check.
+   */
+  filter?: string;
 }
+
+/** Outcome of running a rule's {@link AgentRule.filter} command. */
+export type FilterResult = 'pass' | 'reject' | 'error';
+
+/**
+ * Runs a rule's `filter` command against the matched paths and reports whether
+ * the rule applies. The default implementation spawns a subprocess; callers may
+ * inject their own (e.g. for tests or sandboxing).
+ */
+export type FilterExecutor = (command: string, paths: string[]) => Promise<FilterResult>;
 
 export type Severity = 'blocking' | 'suggestion' | 'nitpick' | 'ignored';
 
@@ -35,6 +52,12 @@ export interface ReviewResult {
   ruleCount: number;
   /** Rule names skipped, with a reason, e.g. "no-secrets (reviewSkip)". */
   skipped: string[];
+  /**
+   * Non-fatal notices, e.g. a `filter` command that errored and was treated as
+   * fail-open ("<rule> (filter error; applied anyway)"). A rule listed here was
+   * still applied — unlike {@link ReviewResult.skipped}.
+   */
+  warnings: string[];
 }
 
 /**
@@ -71,6 +94,21 @@ export interface RunOptions {
    * against {@link RunOptions.minSuggestionImpact}. Default: 2.
    */
   testFileImpactDiscount?: number;
+  /**
+   * When `false`, rule `filter` commands are ignored (treated as absent).
+   * Default: `true`.
+   */
+  runFilters?: boolean;
+  /** Per-filter subprocess timeout in ms. Default: 10000. */
+  filterTimeoutMs?: number;
+  /**
+   * Injectable filter executor (for tests or custom sandboxing). Defaults to
+   * the built-in subprocess runner. Receives the command string and the
+   * glob-matched paths.
+   */
+  filterExecutor?: FilterExecutor;
+  /** Working directory in which `filter` commands run. Default: `process.cwd()`. */
+  cwd?: string;
 }
 
 /** Where {@link getDiff} should source the diff from. */

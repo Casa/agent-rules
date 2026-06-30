@@ -46,4 +46,20 @@ describe('parseRuleFile', () => {
     expect(rule.name).toBe('plain');
     expect(rule.content).toBe('# Just markdown');
   });
+
+  it('parses a quoted filter command', () => {
+    const raw = ['---', 'globs: "*.ts"', 'filter: "grep -ilq TODO"', '---', 'body'].join('\n');
+    expect(parseRuleFile('x.md', raw).filter).toBe('grep -ilq TODO');
+  });
+
+  it('leaves filter unset when absent or empty', () => {
+    const noFilter = parseRuleFile('a.md', ['---', 'globs: "*.ts"', '---', 'body'].join('\n'));
+    expect(noFilter.filter).toBeUndefined();
+
+    const emptyFilter = parseRuleFile(
+      'b.md',
+      ['---', 'globs: "*.ts"', 'filter: "   "', '---', 'body'].join('\n'),
+    );
+    expect(emptyFilter.filter).toBeUndefined();
+  });
 });

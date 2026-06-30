@@ -27,9 +27,12 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN yarn build
 
-# Scripts, sample rules, and entrypoint.
+# Scripts, sample rules, unit tests, and entrypoint. The `test/` dir is needed
+# for the `test` command (vitest); vitest is a devDependency already installed
+# above by `yarn install --frozen-lockfile`.
 COPY scripts ./scripts
 COPY examples ./examples
+COPY test ./test
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh scripts/*.sh
 
