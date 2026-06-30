@@ -95,7 +95,9 @@ export async function loadRules(dir: string): Promise<AgentRule[]> {
   const rules: AgentRule[] = [];
   for (const file of files) {
     const raw = await readFile(file, 'utf8');
-    rules.push(parseRuleFile(path.basename(file), raw));
+    const rule = parseRuleFile(path.basename(file), raw);
+    rule.filePath = file;
+    rules.push(rule);
   }
   return rules;
 }

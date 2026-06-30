@@ -92,7 +92,7 @@ async function main(): Promise<number> {
     const changed = extractChangedFiles(diff);
     const { rules } = await discoverApplicableRules(values.rules ?? '.agent/rules', changed);
     if (values.output === 'json') {
-      const payload = rules.map((r) => ({ name: r.name, globs: r.globs, content: r.content }));
+      const payload = rules.map((r) => ({ name: r.name, globs: r.globs, content: r.content, filePath: r.filePath }));
       process.stdout.write(JSON.stringify({ rules: payload }, null, 2) + '\n');
     } else {
       process.stdout.write(formatRuleList(rules));

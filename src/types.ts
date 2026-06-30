@@ -8,6 +8,8 @@ export interface AgentRule {
   globs: string[];
   /** When `true`, the rule is parsed but excluded from review. */
   reviewSkip?: boolean;
+  /** Absolute path to the source rule file. Set by {@link loadRules}. */
+  filePath?: string;
 }
 
 export type Severity = 'blocking' | 'suggestion' | 'nitpick' | 'ignored';

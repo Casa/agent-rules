@@ -26,7 +26,7 @@
     "examples"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -47,10 +47,11 @@
     "rules",
     "ai"
   ],
-  "dependencies": {
-    "zod": "^3.23.8"
+  "peerDependencies": {
+    "zod": "^4.0.0"
   },
   "devDependencies": {
+    "zod": "^4.0.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.7.0",
     "eslint": "^10.5.0",
