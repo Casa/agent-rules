@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "prepare": "yarn build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

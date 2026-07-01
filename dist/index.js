@@ -1,25 +1,8 @@
-export type {
-  AgentRule,
-  Finding,
-  Severity,
-  ReviewResult,
-  RunOptions,
-  LLMAdapter,
-  DiffSource,
-} from './types.js';
-
 export { collectRuleFiles, parseRuleFile, loadRules } from './rule.js';
 export { matchGlob, matchGlobs } from './glob.js';
 export { extractChangedFiles, extractDiffSections, buildDiffLineMap, getDiff } from './diff.js';
 export { buildReviewPrompt } from './prompt.js';
-export {
-  deduplicateFindings,
-  filterFindingsToDiff,
-  prioritizeFindings,
-  isTestFile,
-} from './filter.js';
+export { deduplicateFindings, filterFindingsToDiff, prioritizeFindings, isTestFile, } from './filter.js';
 export { FindingSchema, extractJsonArray, parseFindings } from './parse.js';
 export { runReview, discoverApplicableRules } from './runner.js';
-export type { DiscoveryResult } from './runner.js';
 export { resolveTransport } from './exec-adapter.js';
-export type { ResolveOptions, ResolvedTransport } from './exec-adapter.js';
