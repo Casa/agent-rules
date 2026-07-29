@@ -119,7 +119,12 @@ async function main(): Promise<number> {
     );
     for (const w of warnings) process.stderr.write(`warning: ${w}\n`);
     if (values.output === 'json') {
-      const payload = rules.map((r) => ({ name: r.name, globs: r.globs, content: r.content }));
+      const payload = rules.map((r) => ({
+        name: r.name,
+        globs: r.globs,
+        content: r.content,
+        filePath: r.filePath,
+      }));
       process.stdout.write(JSON.stringify({ rules: payload, warnings }, null, 2) + '\n');
     } else {
       process.stdout.write(formatRuleList(rules));

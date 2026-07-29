@@ -22,16 +22,28 @@ false`; bound with `--filter-timeout` / `filterTimeoutMs` (default 10000 ms).
   command, reusing the same rule-parsing, glob-matching, and filter-execution
   engine. Informational only (no blocking); `reviewSkip` does not exclude a
   rule from injection (it only gates the diff-review path); each rule is
-  injected at most once per session, deduped by its path relative to
-  `rulesDir` (not `rule.name`, which isn't guaranteed unique across the rules
-  tree). A relative `rulesDir` resolves against the project root, not the hook
-  process's own working directory. New `agent-rules setup` subcommand merges
-  the hook into a project's `.claude/settings.json` (creating it if needed,
-  idempotent when the hook is already registered under its own matcher,
-  leaves other hooks/settings untouched, never throws on a malformed existing
-  file); see the README for the manual JSON snippet. New exports:
-  `buildHookContext`, `toRepoRelativePath`, `mergeHookSettings`,
+  injected at most once per session, deduped by its source file path
+  (`AgentRule.filePath`), not `rule.name`, which isn't guaranteed unique across
+  the rules tree. A relative `rulesDir` resolves against the project root, not
+  the hook process's own working directory. New `agent-rules setup`
+  subcommand merges the hook into a project's `.claude/settings.json`
+  (creating it if needed, idempotent when the hook is already registered under
+  its own matcher, leaves other hooks/settings untouched, never throws on a
+  malformed existing file); see the README for the manual JSON snippet. New
+  exports: `buildHookContext`, `toRepoRelativePath`, `mergeHookSettings`,
   `HOOK_MATCHER`, `HOOK_COMMAND`.
+- `AgentRule.filePath`: the absolute source path of each rule, set by
+  `loadRules`; included in `--list --output json`.
+- Git-dependency installs (`"@casa/agent-rules": "github:..."`) now actually
+  work: `dist/` is committed (no longer `.gitignore`d) and a `prepare: yarn
+build` script rebuilds it from source, so installing directly from a GitHub
+  commit — instead of the published npm package — no longer silently ships an
+  empty/stale `dist/`.
+- `zod` is now a `peerDependency` (`^4.0.0`) instead of a bundled `dependency`,
+  so consumers that already depend on zod (e.g. for their own schemas) don't
+  get a second, separate copy installed alongside theirs.
+- New exports: `resolveTransport`, `ResolveOptions`, `ResolvedTransport` (the
+  CLI's model-transport resolution, for programmatic reuse).
 
 ## [0.1.0] - 2026-06-26
 

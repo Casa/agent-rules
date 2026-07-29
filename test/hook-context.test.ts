@@ -55,6 +55,8 @@ describe('buildHookContext', () => {
     await rm(rulesDir, { recursive: true, force: true });
   });
 
+  const keyFor = (name: string): string => path.join(rulesDir, name);
+
   it('injects rules whose globs match, including reviewSkip ones', async () => {
     const result = await buildHookContext({
       rulesDir,
@@ -62,7 +64,9 @@ describe('buildHookContext', () => {
       filterExecutor: () => Promise.resolve('pass'),
     });
 
-    expect(result.injectedRuleKeys.sort()).toEqual(['filtered.md', 'payments.md', 'skip.md']);
+    expect(result.injectedRuleKeys.sort()).toEqual(
+      [keyFor('filtered.md'), keyFor('payments.md'), keyFor('skip.md')].sort(),
+    );
     expect(result.additionalContext).toContain('Body A.');
     expect(result.additionalContext).toContain('Body B.'); // reviewSkip does not exclude
   });
@@ -79,7 +83,7 @@ describe('buildHookContext', () => {
       filePath: 'src/payments/foo.ts',
       filterExecutor: () => Promise.resolve('reject'),
     });
-    expect(result.injectedRuleKeys).not.toContain('filtered.md');
+    expect(result.injectedRuleKeys).not.toContain(keyFor('filtered.md'));
   });
 
   it('fails open (applies) when the filter errors', async () => {
@@ -88,7 +92,7 @@ describe('buildHookContext', () => {
       filePath: 'src/payments/foo.ts',
       filterExecutor: () => Promise.resolve('error'),
     });
-    expect(result.injectedRuleKeys).toContain('filtered.md');
+    expect(result.injectedRuleKeys).toContain(keyFor('filtered.md'));
   });
 
   it('calls the filter executor with the single touched path', async () => {
@@ -106,7 +110,7 @@ describe('buildHookContext', () => {
       rulesDir,
       filePath: 'src/payments/foo.ts',
       filterExecutor: () => Promise.resolve('pass'),
-      alreadyInjected: new Set(['payments.md', 'skip.md', 'filtered.md']),
+      alreadyInjected: new Set([keyFor('payments.md'), keyFor('skip.md'), keyFor('filtered.md')]),
     });
     expect(result.injectedRuleKeys).toEqual([]);
     expect(result.additionalContext).toBeNull();
@@ -117,9 +121,11 @@ describe('buildHookContext', () => {
       rulesDir,
       filePath: 'src/payments/foo.ts',
       filterExecutor: () => Promise.resolve('pass'),
-      alreadyInjected: new Set(['payments.md']),
+      alreadyInjected: new Set([keyFor('payments.md')]),
     });
-    expect(result.injectedRuleKeys.sort()).toEqual(['filtered.md', 'skip.md']);
+    expect(result.injectedRuleKeys.sort()).toEqual(
+      [keyFor('filtered.md'), keyFor('skip.md')].sort(),
+    );
     expect(result.additionalContext).not.toContain('Body A.');
     expect(result.additionalContext).toContain('Body B.');
   });
@@ -136,7 +142,7 @@ describe('buildHookContext', () => {
       },
     });
     expect(called).toBe(false);
-    expect(result.injectedRuleKeys).toContain('filtered.md');
+    expect(result.injectedRuleKeys).toContain(keyFor('filtered.md'));
   });
 
   it('resolves a relative rulesDir against cwd, not process.cwd()', async () => {

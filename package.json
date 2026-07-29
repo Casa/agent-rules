@@ -27,7 +27,8 @@
     "examples"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js dist/hook.js",
+    "prepare": "yarn build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -49,8 +50,8 @@
     "rules",
     "ai"
   ],
-  "dependencies": {
-    "zod": "^3.23.8"
+  "peerDependencies": {
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -60,6 +61,7 @@
     "prettier": "^3.8.5",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.62.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "zod": "^4.0.0"
   }
 }

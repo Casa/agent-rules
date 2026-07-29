@@ -1,9 +1,8 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { makeFilterExecutor } from './filter-exec.js';
 import { matchGlobs } from './glob.js';
-import { collectRuleFiles, parseRuleFile } from './rule.js';
+import { loadRules } from './rule.js';
 import type { AgentRule, FilterExecutor, FilterResult } from './types.js';
 
 /**
@@ -50,14 +49,20 @@ export interface HookContextResult {
   /**
    * Per-rule dedup keys for the rules that matched and were newly selected —
    * feed these into `alreadyInjected` on the next call to keep deduping.
-   * Currently each rule's file path relative to `rulesDir` (stable and unique
-   * across the rules tree, unlike `rule.name`, which is only the filename
-   * when a rule has no `description` and collides if two rules share one).
-   * Not intended as a human-readable label — see `additionalContext` for that.
+   * Currently each rule's `filePath` (absolute, set by `loadRules`) — stable
+   * and unique across the rules tree, unlike `rule.name`, which is only the
+   * filename when a rule has no `description` and collides if two rules
+   * share one. Not intended as a human-readable label — see
+   * `additionalContext` for that.
    */
   injectedRuleKeys: string[];
   /** Concatenated rule content to inject as `additionalContext`, or `null` if nothing applies. */
   additionalContext: string | null;
+}
+
+/** A rule's dedup key: its source file path, falling back to its name if somehow unset. */
+function keyOf(rule: AgentRule): string {
+  return rule.filePath ?? rule.name;
 }
 
 /**
@@ -86,19 +91,10 @@ export async function buildHookContext(options: HookContextOptions): Promise<Hoo
     ? options.rulesDir
     : path.resolve(options.cwd ?? process.cwd(), options.rulesDir);
 
-  // Loaded directly via collectRuleFiles/parseRuleFile (rather than the
-  // loadRules() convenience wrapper) so each rule can be paired with its file
-  // path relative to rulesDir — a stable, unique-per-file dedup key. rule.name
-  // isn't: it falls back to the bare filename when a rule has no
-  // `description`, and two rules in different subdirectories can share one.
-  const files = await collectRuleFiles(rulesDir);
-  const applicable: { rule: AgentRule; key: string }[] = [];
+  const rules = await loadRules(rulesDir);
+  const applicable: AgentRule[] = [];
 
-  for (const file of files) {
-    const raw = await readFile(file, 'utf8');
-    const rule = parseRuleFile(path.basename(file), raw);
-    const key = path.relative(rulesDir, file);
-
+  for (const rule of rules) {
     if (rule.globs.length === 0) continue;
     if (!matchGlobs(options.filePath, rule.globs)) continue;
 
@@ -113,16 +109,16 @@ export async function buildHookContext(options: HookContextOptions): Promise<Hoo
       // 'error' fails open, same as the diff-review path.
     }
 
-    applicable.push({ rule, key });
+    applicable.push(rule);
   }
 
-  const fresh = applicable.filter(({ key }) => !alreadyInjected.has(key));
+  const fresh = applicable.filter((rule) => !alreadyInjected.has(keyOf(rule)));
   if (fresh.length === 0) {
     return { injectedRuleKeys: [], additionalContext: null };
   }
 
   return {
-    injectedRuleKeys: fresh.map(({ key }) => key),
-    additionalContext: fresh.map(({ rule }) => `## ${rule.name}\n\n${rule.content}`).join('\n\n'),
+    injectedRuleKeys: fresh.map(keyOf),
+    additionalContext: fresh.map((rule) => `## ${rule.name}\n\n${rule.content}`).join('\n\n'),
   };
 }

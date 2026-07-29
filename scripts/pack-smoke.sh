@@ -31,7 +31,10 @@ cd "$ROOT"
 yarn build >/dev/null
 
 WORK="$(mktemp -d)"
-TARBALL="$(cd "$WORK" && npm pack "$ROOT" --silent)"
+# `npm pack` runs the package's `prepare` script (yarn build) before packing a
+# local-directory source; that build's own log lines land on the same stdout,
+# so only the last line is the actual tarball filename.
+TARBALL="$(cd "$WORK" && npm pack "$ROOT" --silent | tail -1)"
 echo "packed: $TARBALL"
 
 # Tarball must contain dist/ and must not contain src/.
@@ -49,7 +52,7 @@ exports_ok="$(cd "$PROJ" && node --input-type=module -e '
   import * as m from "@casa/agent-rules";
   const need = [
     "runReview","getDiff","matchGlob","matchGlobs","parseRuleFile","buildReviewPrompt","parseFindings",
-    "buildHookContext","toRepoRelativePath","mergeHookSettings",
+    "buildHookContext","toRepoRelativePath","mergeHookSettings","resolveTransport",
   ];
   const missing = need.filter((n) => typeof m[n] !== "function");
   process.stdout.write(missing.length ? "missing:" + missing.join(",") : "ok");
