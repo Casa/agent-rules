@@ -64,6 +64,12 @@ export { runReview };
 // Diff acquisition (used internally by the CLI; exported for programmatic use)
 export { getDiff } from './diff.js';
 export type { DiffSource } from './diff.js';
+
+// Hook (live context injection) and settings-merge building blocks
+export { buildHookContext, toRepoRelativePath };
+export type { HookContextOptions, HookContextResult };
+export { mergeHookSettings, HOOK_MATCHER, HOOK_COMMAND };
+export type { ClaudeSettings, MergeHookSettingsResult };
 ```
 
 All exports are named. There is no default export.
@@ -81,7 +87,11 @@ agent-rules/
 │   ├── filter.ts         ← deduplicateFindings, filterFindingsToDiff, prioritizeFindings
 │   ├── filter-exec.ts    ← makeFilterExecutor (default `filter`-command runner)
 │   ├── runner.ts         ← runReview, discoverApplicableRules
-│   └── cli.ts            ← CLI entrypoint (bin)
+│   ├── hook-context.ts   ← buildHookContext, toRepoRelativePath
+│   ├── hook-state.ts     ← per-session dedup state for the hook
+│   ├── hook.ts           ← PostToolUse hook entrypoint (bin: agent-rules-hook)
+│   ├── settings.ts       ← mergeHookSettings (used by the `setup` subcommand)
+│   └── cli.ts            ← CLI entrypoint (bin), incl. the `setup` subcommand
 ├── package.json
 └── tsconfig.json
 ```
@@ -92,7 +102,8 @@ The `package.json` `bin` field registers the CLI command:
 {
   "name": "@casa/agent-rules",
   "bin": {
-    "agent-rules": "./dist/cli.js"
+    "agent-rules": "./dist/cli.js",
+    "agent-rules-hook": "./dist/hook.js"
   }
 }
 ```
@@ -520,6 +531,125 @@ output is accurate; `--no-filters` opts out there too.
 
 ---
 
+## Hook integration (live context injection)
+
+The CLI and slash command review a diff on demand. `agent-rules-hook` is a
+second, continuous consumer of the same `.agent/rules/*.md` files: a Claude
+Code `PostToolUse` hook that injects a rule's body into the agent's context
+whenever a `Read`, `Write`, or `Edit` touches a file the rule's `globs` (and
+`filter`) match — no diff, no model call, and no new rule-file format.
+
+### Entrypoint contract
+
+`agent-rules-hook` (bin: `dist/hook.js`) speaks Claude Code's hook protocol on
+stdin/stdout:
+
+- **Input:** the `PostToolUse` JSON payload on stdin. Only `session_id`, `cwd`,
+  `tool_name`, and `tool_input.file_path` are read; all other fields are
+  ignored.
+- **Tool scope:** only `Read`, `Write`, and `Edit` are handled; any other
+  `tool_name` (or a missing `file_path`) is a silent no-op (exit `0`, no
+  output).
+- **Path resolution:** `tool_input.file_path` (typically absolute) is resolved
+  relative to the project root (`cwd` from the payload, falling back to
+  `$CLAUDE_PROJECT_DIR`, then `process.cwd()`) into the forward-slash form
+  `matchGlobs` expects. A path outside the project root, or the project root
+  itself, is a no-op.
+- **Rule discovery and matching:** rules are discovered the same way as the
+  diff-review path (same front-matter, same `matchGlobs`), but read directly
+  via `collectRuleFiles`/`parseRuleFile` rather than `loadRules`, so each rule
+  can be paired with its file path relative to `rulesDir` (see Dedup below).
+  `rulesDir` (default `.agent/rules`, overridable via a `--rules <dir>`
+  argument baked into the hook's `command` string) is resolved against the
+  project root (the payload's `cwd`/`$CLAUDE_PROJECT_DIR`), **not** the hook
+  process's own working directory — the two are not guaranteed to match. The
+  rule's `filter` command (if any) runs with the same grep-style, fail-open
+  exit-code semantics as `discoverApplicableRules`, just invoked with the
+  single touched path instead of a diff's changed-files list. **`reviewSkip`
+  is not checked**: it only gates the diff-review path, so a `reviewSkip: true`
+  rule still injects here.
+- **Dedup:** a rule is injected **at most once per session**, best-effort,
+  keyed by the rule's file path relative to `rulesDir` — **not** `rule.name`,
+  which is only the filename when a rule has no `description` and is not
+  guaranteed unique across the rules tree (two rules in different
+  subdirectories can share one; keying on name alone would make one silently
+  suppress the other's injection for the rest of the session). State is a
+  small JSON file of already-injected keys, keyed by the payload's
+  `session_id`, under the OS temp directory — which is not guaranteed
+  writable in every environment (sandboxes, unusual `TMPDIR` configuration).
+  A dedup-state read or write failure must never prevent emitting
+  `additionalContext` for a rule that matched; it degrades to re-injecting
+  that rule on a later call instead. A rule is still evaluated (globs +
+  filter) on every matching call regardless of dedup state, since
+  applicability can legitimately differ file to file.
+- **Output:** when at least one rule newly applies, prints
+  `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"<concatenated rule bodies>"}}`
+  to stdout and exits `0`. No matches (or only already-injected rules) ⇒ exit
+  `0` with no output.
+- **Failure isolation:** the hook must never fail the tool call it fired on.
+  Malformed stdin, a missing rules directory, or any other internal error is
+  caught and treated as a no-op (exit `0`, diagnostic to stderr only) — the
+  same fail-open philosophy as the `filter` stage.
+- **Scope:** informational only. There is no blocking/warning variant (that
+  would be a `PreToolUse`-based feature with its own front-matter, out of
+  scope here).
+
+### `agent-rules setup` subcommand
+
+Wires the hook into a consumer repo's Claude Code configuration:
+
+- Reads (or creates) `.claude/settings.json` in the current working directory.
+- Merges in a `PostToolUse` hook entry (matcher `Read|Write|Edit`, command
+  `${CLAUDE_PROJECT_DIR}/node_modules/.bin/agent-rules-hook`) without
+  disturbing any other hooks or settings already present.
+- Idempotent: if a hook with that exact command is already registered under
+  `PostToolUse` **with the `Read|Write|Edit` matcher specifically** (not just
+  present somewhere under `PostToolUse` with a different matcher, which would
+  leave Read/Write/Edit uncovered), the file is left untouched and the
+  subcommand reports as much.
+- Never throws on a malformed pre-existing `.claude/settings.json` (e.g. `null`,
+  or a `PostToolUse` entry missing its `hooks` array) — anything that doesn't
+  look like our own hook entry is left untouched and passed through verbatim.
+- No starter rules are scaffolded — the hook reuses whatever already exists
+  under `.agent/rules/`, including rules written before this feature existed.
+- The manual alternative (pasting the same JSON block by hand) is documented in
+  the README for consumers who'd rather not run the subcommand.
+
+### Types and functions
+
+```typescript
+function toRepoRelativePath(filePath: string, projectRoot: string): string | null;
+
+interface HookContextOptions {
+  rulesDir: string; // may be relative; resolved against cwd, not process.cwd()
+  filePath: string; // repo-relative, from toRepoRelativePath
+  runFilters?: boolean;
+  filterTimeoutMs?: number;
+  filterExecutor?: FilterExecutor;
+  cwd?: string;
+  alreadyInjected?: ReadonlySet<string>; // dedup keys to skip (see injectedRuleKeys)
+}
+
+interface HookContextResult {
+  injectedRuleKeys: string[]; // rule's path relative to rulesDir — unique, unlike rule.name
+  additionalContext: string | null;
+}
+
+async function buildHookContext(options: HookContextOptions): Promise<HookContextResult>;
+
+interface ClaudeSettings {
+  hooks?: { PostToolUse?: unknown[]; [event: string]: unknown };
+  [key: string]: unknown;
+}
+
+function mergeHookSettings(existing: ClaudeSettings): {
+  settings: ClaudeSettings;
+  changed: boolean;
+};
+```
+
+---
+
 ## Diff scoping
 
 Before invoking the reviewing agent, the full diff is narrowed to only the sections relevant to the current rule. This reduces context size and prevents the agent from commenting on files it has no mandate to review.
@@ -933,43 +1063,50 @@ const result = await runReview({ diff, rulesDir: '.agent/rules', llm: myAdapter 
 
 ## Requirements summary
 
-| #   | Requirement                                                                                                                                                                                                                  |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Rule files must be valid UTF-8 Markdown with a YAML front-matter block delimited by `---`.                                                                                                                                   |
-| R2  | Both `.md` and `.mdc` file extensions must be supported.                                                                                                                                                                     |
-| R3  | Rules must be discovered by recursively walking the rules directory; subdirectories are allowed.                                                                                                                             |
-| R4  | Rules with `reviewSkip: true` must be excluded from review.                                                                                                                                                                  |
-| R5  | Rules with no `globs` must be excluded from review.                                                                                                                                                                          |
-| R6  | A rule is applicable to a diff only if at least one changed file matches its glob patterns.                                                                                                                                  |
-| R7  | Glob patterns must support `**` (recursive), `*` (single-level), and `!` (negation).                                                                                                                                         |
-| R8  | The diff passed to the LLM must be scoped to only the files matched by that rule's globs.                                                                                                                                    |
-| R9  | The LLM must be given only the rule it is evaluating — not all rules at once.                                                                                                                                                |
-| R10 | Multiple rules must be evaluated concurrently, subject to a caller-configurable limit.                                                                                                                                       |
-| R11 | LLM output must be validated against the `Finding` schema before any finding is used.                                                                                                                                        |
-| R12 | Findings must be filtered to lines that exist in the diff (added or context lines only).                                                                                                                                     |
-| R13 | Low-impact suggestions (below caller-configured threshold) must be dropped before returning.                                                                                                                                 |
-| R14 | The package must not hardcode any LLM provider; callers supply an `LLMAdapter`.                                                                                                                                              |
-| R15 | The package must not hardcode any code review platform or git host.                                                                                                                                                          |
-| R16 | The package must return findings to the caller; it must not post or store them itself.                                                                                                                                       |
-| R17 | The rules directory path must be a required parameter, not read from an environment variable.                                                                                                                                |
-| R18 | All behaviour-affecting thresholds (concurrency, impact cutoff, test discount) must be configurable via `RunOptions` with documented defaults.                                                                               |
-| R19 | The package must ship TypeScript types for all public exports.                                                                                                                                                               |
-| R20 | The package must be published as a single, pure-ESM package (`"type": "module"`) targeting Node ≥22.                                                                                                                         |
-| R21 | The package must ship a `bin` entry (`agent-rules`) invocable via `npx` / `yarn dlx`.                                                                                                                                        |
-| R22 | The CLI must support three mutually exclusive diff sources: `--working-tree`, `--staged`, and `--diff <range>`.                                                                                                              |
-| R23 | The CLI must exit with code `0` when no blocking findings are found, `1` when blocking findings are present, and `2` on error.                                                                                               |
-| R24 | The CLI must support `--output json` for machine-readable output and `--output text` (default) for human-readable output.                                                                                                    |
-| R25 | `getDiff` must be exported as a standalone function so programmatic callers can acquire a diff without re-implementing git integration.                                                                                      |
-| R26 | The CLI must obtain model responses by delegating to a local agent executable (subprocess), not by calling any model API directly; the package bundles no provider SDKs or API-key handling.                                 |
-| R27 | The CLI must resolve the executable in order: `--exec` override → `--transport` pin → launching-agent context (env markers) → PATH discovery (`claude`, then `codex`).                                                       |
-| R28 | If no executable resolves, the CLI must fail with exit code 2 and actionable guidance. There must be no silent API-key fallback.                                                                                             |
-| R29 | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command.                          |
-| R30 | `runReview` must own no timeout/retry policy (resilience is the `LLMAdapter`'s responsibility) but must isolate per-rule failures: a rejected `run` drops that rule into `ReviewResult.skipped` without aborting the review. |
-| R31 | The CLI must provide a `--list` mode that discovers and prints the rules applicable to the diff without invoking a transport, so editor/agent integrations (slash commands) can fetch rules without spawning a nested agent. |
-| R32 | A rule may declare an optional `filter` front-matter field: a single command string. Absent or empty (after stripping quotes and whitespace) ⇒ no second-stage check.                                                        |
-| R33 | The filter runs only after a rule's globs match at least one changed file, once per rule, with the matched paths appended as command arguments and stdin empty.                                                              |
-| R34 | Filter results follow grep-style exit codes: `0` ⇒ applies; `1` ⇒ skipped (recorded in `skipped`); any other exit, spawn failure, or timeout ⇒ fail-open (applies).                                                          |
-| R35 | Filter errors must never abort the review and must be surfaced as non-fatal `warnings`, distinct from `skipped`.                                                                                                             |
-| R36 | Filter execution must be disableable via `runFilters: false` / `--no-filters`, and bounded by a configurable timeout (`filterTimeoutMs` / `--filter-timeout`, default 10000 ms).                                             |
-| R37 | The filter executor must be injectable (`RunOptions.filterExecutor`) so discovery is testable without real subprocesses; the default spawns with the review `cwd` and the `AGENT_RULES_SUBPROCESS` marker set.               |
-| R38 | `--list` must reflect the post-filter applicable set and honour `--no-filters`; the filter feature must be documented as executing repo-defined commands (trust model).                                                      |
+| #    | Requirement                                                                                                                                                                                                                                                                                                                                           |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------- |
+| R1   | Rule files must be valid UTF-8 Markdown with a YAML front-matter block delimited by `---`.                                                                                                                                                                                                                                                            |
+| R2   | Both `.md` and `.mdc` file extensions must be supported.                                                                                                                                                                                                                                                                                              |
+| R3   | Rules must be discovered by recursively walking the rules directory; subdirectories are allowed.                                                                                                                                                                                                                                                      |
+| R4   | Rules with `reviewSkip: true` must be excluded from review.                                                                                                                                                                                                                                                                                           |
+| R5   | Rules with no `globs` must be excluded from review.                                                                                                                                                                                                                                                                                                   |
+| R6   | A rule is applicable to a diff only if at least one changed file matches its glob patterns.                                                                                                                                                                                                                                                           |
+| R7   | Glob patterns must support `**` (recursive), `*` (single-level), and `!` (negation).                                                                                                                                                                                                                                                                  |
+| R8   | The diff passed to the LLM must be scoped to only the files matched by that rule's globs.                                                                                                                                                                                                                                                             |
+| R9   | The LLM must be given only the rule it is evaluating — not all rules at once.                                                                                                                                                                                                                                                                         |
+| R10  | Multiple rules must be evaluated concurrently, subject to a caller-configurable limit.                                                                                                                                                                                                                                                                |
+| R11  | LLM output must be validated against the `Finding` schema before any finding is used.                                                                                                                                                                                                                                                                 |
+| R12  | Findings must be filtered to lines that exist in the diff (added or context lines only).                                                                                                                                                                                                                                                              |
+| R13  | Low-impact suggestions (below caller-configured threshold) must be dropped before returning.                                                                                                                                                                                                                                                          |
+| R14  | The package must not hardcode any LLM provider; callers supply an `LLMAdapter`.                                                                                                                                                                                                                                                                       |
+| R15  | The package must not hardcode any code review platform or git host.                                                                                                                                                                                                                                                                                   |
+| R16  | The package must return findings to the caller; it must not post or store them itself.                                                                                                                                                                                                                                                                |
+| R17  | The rules directory path must be a required parameter, not read from an environment variable.                                                                                                                                                                                                                                                         |
+| R18  | All behaviour-affecting thresholds (concurrency, impact cutoff, test discount) must be configurable via `RunOptions` with documented defaults.                                                                                                                                                                                                        |
+| R19  | The package must ship TypeScript types for all public exports.                                                                                                                                                                                                                                                                                        |
+| R20  | The package must be published as a single, pure-ESM package (`"type": "module"`) targeting Node ≥22.                                                                                                                                                                                                                                                  |
+| R21  | The package must ship a `bin` entry (`agent-rules`) invocable via `npx` / `yarn dlx`.                                                                                                                                                                                                                                                                 |
+| R22  | The CLI must support three mutually exclusive diff sources: `--working-tree`, `--staged`, and `--diff <range>`.                                                                                                                                                                                                                                       |
+| R23  | The CLI must exit with code `0` when no blocking findings are found, `1` when blocking findings are present, and `2` on error.                                                                                                                                                                                                                        |
+| R24  | The CLI must support `--output json` for machine-readable output and `--output text` (default) for human-readable output.                                                                                                                                                                                                                             |
+| R25  | `getDiff` must be exported as a standalone function so programmatic callers can acquire a diff without re-implementing git integration.                                                                                                                                                                                                               |
+| R26  | The CLI must obtain model responses by delegating to a local agent executable (subprocess), not by calling any model API directly; the package bundles no provider SDKs or API-key handling.                                                                                                                                                          |
+| R27  | The CLI must resolve the executable in order: `--exec` override → `--transport` pin → launching-agent context (env markers) → PATH discovery (`claude`, then `codex`).                                                                                                                                                                                |
+| R28  | If no executable resolves, the CLI must fail with exit code 2 and actionable guidance. There must be no silent API-key fallback.                                                                                                                                                                                                                      |
+| R29  | The CLI must ship built-in invocation profiles for recognised tools (`claude`, `codex`) that force a clean, tool-free completion; `--exec` must bypass profiles and run a raw stdin→stdout command.                                                                                                                                                   |
+| R30  | `runReview` must own no timeout/retry policy (resilience is the `LLMAdapter`'s responsibility) but must isolate per-rule failures: a rejected `run` drops that rule into `ReviewResult.skipped` without aborting the review.                                                                                                                          |
+| R31  | The CLI must provide a `--list` mode that discovers and prints the rules applicable to the diff without invoking a transport, so editor/agent integrations (slash commands) can fetch rules without spawning a nested agent.                                                                                                                          |
+| R32  | A rule may declare an optional `filter` front-matter field: a single command string. Absent or empty (after stripping quotes and whitespace) ⇒ no second-stage check.                                                                                                                                                                                 |
+| R33  | The filter runs only after a rule's globs match at least one changed file, once per rule, with the matched paths appended as command arguments and stdin empty.                                                                                                                                                                                       |
+| R34  | Filter results follow grep-style exit codes: `0` ⇒ applies; `1` ⇒ skipped (recorded in `skipped`); any other exit, spawn failure, or timeout ⇒ fail-open (applies).                                                                                                                                                                                   |
+| R35  | Filter errors must never abort the review and must be surfaced as non-fatal `warnings`, distinct from `skipped`.                                                                                                                                                                                                                                      |
+| R36  | Filter execution must be disableable via `runFilters: false` / `--no-filters`, and bounded by a configurable timeout (`filterTimeoutMs` / `--filter-timeout`, default 10000 ms).                                                                                                                                                                      |
+| R37  | The filter executor must be injectable (`RunOptions.filterExecutor`) so discovery is testable without real subprocesses; the default spawns with the review `cwd` and the `AGENT_RULES_SUBPROCESS` marker set.                                                                                                                                        |
+| R38  | `--list` must reflect the post-filter applicable set and honour `--no-filters`; the filter feature must be documented as executing repo-defined commands (trust model).                                                                                                                                                                               |
+| R39  | The package must ship an `agent-rules-hook` bin entry that reads a Claude Code `PostToolUse` JSON payload from stdin and, for `Read`/`Write`/`Edit` only, resolves `tool_input.file_path` to a project-relative path.                                                                                                                                 |
+| R40  | Hook rule matching must reuse the same `matchGlobs`/`filter` discovery as the diff-review path, scoped to the single touched path; `reviewSkip` must not exclude a rule from hook injection; a relative `rulesDir` must be resolved against the project root (`cwd`), not the hook process's own working directory.                                   |
+| R41  | A rule must be injected at most once per Claude Code session, best-effort, deduped by a per-rule key unique across the rules tree (the rule's path relative to `rulesDir`, not `rule.name`, which is not guaranteed unique) and `session_id` via a temp-directory state file; re-evaluation (globs + filter) must still occur on every matching call. |
+| R42  | On a match, the hook must emit `{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"…"}}` on stdout and exit `0`; on no match it must exit `0` with no output.                                                                                                                                                                  |
+| R43  | The hook must never fail the tool call it fired on: malformed input, a missing rules directory, or any other internal error must be caught and treated as a no-op (exit `0`), with diagnostics limited to stderr.                                                                                                                                     |
+| R43a | A failure to read or write the dedup-state file (e.g. an unwritable OS temp directory) must never suppress `additionalContext` for a rule that matched; it must only degrade dedup (the rule may be re-injected on a later call).                                                                                                                     |
+| R44  | The package must ship an `agent-rules setup` CLI subcommand that merges the `PostToolUse` hook into the current project's `.claude/settings.json` (creating it if absent) without disturbing other hooks/settings, is idempotent only when the hook is already registered under its own `Read                                                         | Write | Edit` matcher specifically, and must never throw on a malformed pre-existing settings file. |

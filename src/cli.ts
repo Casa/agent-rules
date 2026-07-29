@@ -1,17 +1,21 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { extractChangedFiles, getDiff } from './diff.js';
 import { resolveTransport } from './exec-adapter.js';
 import { discoverApplicableRules, runReview } from './runner.js';
+import { mergeHookSettings } from './settings.js';
+import type { ClaudeSettings } from './settings.js';
 import type { AgentRule, DiffSource, Finding, ReviewResult } from './types.js';
 
 const USAGE = `agent-rules — apply Markdown-defined coding rules to a diff via a local agent CLI
 
 Usage:
   agent-rules (--working-tree | --staged | --diff <range>) [options]
+  agent-rules setup
 
 Diff source (exactly one required):
   --working-tree            Uncommitted changes (staged + unstaged + untracked)
@@ -36,9 +40,18 @@ Options:
   -h, --help                Show this help
   -v, --version             Show version
 
+Subcommand:
+  setup                     Wire the agent-rules PostToolUse hook into
+                            ./.claude/settings.json (creates it if missing).
+                            Merges in; never overwrites other hooks/settings.
+
 Exit codes: 0 = clean, 1 = blocking findings, 2 = error`;
 
 async function main(): Promise<number> {
+  if (process.argv[2] === 'setup') {
+    return runSetup();
+  }
+
   const { values } = parseArgs({
     options: {
       'working-tree': { type: 'boolean' },
@@ -178,6 +191,39 @@ function parseIntOption(value: unknown, name: string): number | undefined {
   const n = Number.parseInt(String(value), 10);
   if (Number.isNaN(n)) throw new Error(`--${name} must be an integer`);
   return n;
+}
+
+/**
+ * `agent-rules setup`: wire the `agent-rules-hook` PostToolUse hook into the
+ * current project's `.claude/settings.json`, creating the file (and its
+ * parent directory) if needed. Merges in — other hooks/settings already
+ * present are left untouched — and is idempotent.
+ */
+async function runSetup(): Promise<number> {
+  const settingsPath = path.join(process.cwd(), '.claude', 'settings.json');
+
+  let existing: ClaudeSettings = {};
+  try {
+    existing = JSON.parse(await readFile(settingsPath, 'utf8')) as ClaudeSettings;
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== 'ENOENT') {
+      process.stderr.write(`error: could not read ${settingsPath}: ${e.message}\n`);
+      return 2;
+    }
+  }
+
+  const { settings, changed } = mergeHookSettings(existing);
+  if (!changed) {
+    process.stdout.write(`agent-rules hook is already configured in ${settingsPath}\n`);
+    return 0;
+  }
+
+  await mkdir(path.dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  process.stdout.write(`Added the agent-rules PostToolUse hook to ${settingsPath}\n`);
+  process.stdout.write('Commit this file so the rest of the team picks up the hook too.\n');
+  return 0;
 }
 
 function formatRuleList(rules: AgentRule[]): string {

@@ -25,3 +25,7 @@ export { makeFilterExecutor } from './filter-exec.js';
 export type { FilterExecOptions } from './filter-exec.js';
 export { runReview, discoverApplicableRules } from './runner.js';
 export type { DiscoveryResult, DiscoverOptions } from './runner.js';
+export { buildHookContext, toRepoRelativePath } from './hook-context.js';
+export type { HookContextOptions, HookContextResult } from './hook-context.js';
+export { mergeHookSettings, HOOK_MATCHER, HOOK_COMMAND } from './settings.js';
+export type { ClaudeSettings, MergeHookSettingsResult } from './settings.js';

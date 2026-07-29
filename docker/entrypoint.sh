@@ -4,7 +4,7 @@
 #
 #   smoke            hermetic end-to-end test (fake transport, no creds)   [default]
 #   test             unit test suite (vitest), no creds
-#   check            unit tests + smoke (full hermetic test pass), no creds
+#   check            unit tests + smoke + hook-smoke (full hermetic test pass), no creds
 #   verify [args]    live review against a real agent (needs creds);
 #                    extra args pass through, e.g. `verify --transport codex`
 #   demo [args]      review the bundled examples/ sample against a real agent
@@ -22,7 +22,8 @@ case "$cmd" in
     ;;
   check)
     yarn test
-    exec bash scripts/smoke.sh
+    bash scripts/smoke.sh
+    exec bash scripts/hook-smoke.sh
     ;;
   verify)
     shift

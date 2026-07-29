@@ -15,6 +15,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 false`; bound with `--filter-timeout` / `filterTimeoutMs` (default 10000 ms).
   Filter errors surface in the new `ReviewResult.warnings`. New exports:
   `makeFilterExecutor`, `FilterResult`, `FilterExecutor`, `DiscoverOptions`.
+- `agent-rules-hook`: a Claude Code `PostToolUse` hook that applies the same
+  `.agent/rules/*.md` rules live, injecting a matching rule's body into the
+  agent's context whenever a Read/Write/Edit touches a file covered by its
+  `globs` (and `filter`) — a continuous complement to the diff-review CLI/slash
+  command, reusing the same rule-parsing, glob-matching, and filter-execution
+  engine. Informational only (no blocking); `reviewSkip` does not exclude a
+  rule from injection (it only gates the diff-review path); each rule is
+  injected at most once per session, deduped by its path relative to
+  `rulesDir` (not `rule.name`, which isn't guaranteed unique across the rules
+  tree). A relative `rulesDir` resolves against the project root, not the hook
+  process's own working directory. New `agent-rules setup` subcommand merges
+  the hook into a project's `.claude/settings.json` (creating it if needed,
+  idempotent when the hook is already registered under its own matcher,
+  leaves other hooks/settings untouched, never throws on a malformed existing
+  file); see the README for the manual JSON snippet. New exports:
+  `buildHookContext`, `toRepoRelativePath`, `mergeHookSettings`,
+  `HOOK_MATCHER`, `HOOK_COMMAND`.
 
 ## [0.1.0] - 2026-06-26
 

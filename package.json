@@ -19,7 +19,8 @@
   },
   "types": "./dist/index.d.ts",
   "bin": {
-    "agent-rules": "./dist/cli.js"
+    "agent-rules": "./dist/cli.js",
+    "agent-rules-hook": "./dist/hook.js"
   },
   "files": [
     "dist",
@@ -34,6 +35,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "smoke": "bash scripts/smoke.sh",
+    "hook-smoke": "bash scripts/hook-smoke.sh",
     "pack:smoke": "bash scripts/pack-smoke.sh",
     "verify:transport": "bash scripts/verify-transport.sh",
     "docker:build": "docker build -t agent-rules .",
