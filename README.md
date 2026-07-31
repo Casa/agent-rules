@@ -185,6 +185,59 @@ Then run `/agent-rules` in a session. It reviews your working-tree changes again
 the rules in `.agent/rules`. Edit the copied command to change the rules directory
 or the diff source (e.g. `--staged`).
 
+## Live context injection (hook)
+
+The slash command above reviews a diff on demand. `agent-rules-hook` applies
+the same `.agent/rules/` rule files continuously instead: whenever Claude Code
+reads, writes, or edits a file whose `globs` (and `filter`) match, the rule's
+body is injected straight into the agent's context — no diff, no model call,
+just the matching rule text surfacing while the agent works. It's purely
+informational (there's no way for a rule to block a write); each rule is
+injected at most once per session, regardless of how many times a matching
+file is touched. `reviewSkip` has no effect here — it only excludes a rule
+from the diff-review path.
+
+The once-per-session dedup is tracked in a small state file under the OS temp
+directory, keyed by session ID — best-effort only. If that directory isn't
+writable in your environment (a locked-down sandbox, an unusual `TMPDIR`), the
+hook still injects matching rule content; it just can't remember what it
+already showed, so a rule may repeat across a session instead of firing once.
+
+**Setup (automated):**
+
+```sh
+npx agent-rules setup
+```
+
+This merges a `PostToolUse` hook into your project's `.claude/settings.json`
+(creating the file if needed) without disturbing any other hooks or settings
+already there, and is safe to run more than once. Commit the file so the rest
+of the team gets the hook too.
+
+**Setup (manual):** paste this into `.claude/settings.json` yourself:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/node_modules/.bin/agent-rules-hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Pass a non-default rules directory by appending `--rules <dir>` to the
+`command` string, the same flag the CLI uses.
+
 ## Transport notes (CLI)
 
 The CLI delegates to a local agent in headless mode, so the agent must be usable
@@ -203,8 +256,9 @@ If neither resolves (and no `--exec` is given), the CLI exits 2 with guidance.
 yarn install
 yarn build            # compile to dist/ (pure ESM + .d.ts)
 yarn typecheck
-yarn test             # 36 unit tests (hermetic)
+yarn test             # unit tests (hermetic)
 yarn smoke            # end-to-end CLI test via a fake transport (hermetic, CI-safe)
+yarn hook-smoke       # end-to-end PostToolUse hook + `setup` test (hermetic, CI-safe)
 yarn verify:transport # live check against a real claude/codex (manual, makes a model call)
 ```
 

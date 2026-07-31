@@ -15,6 +15,8 @@ export interface AgentRule {
    * or timeout) ⇒ fail-open (applies). Absent ⇒ no second-stage check.
    */
   filter?: string;
+  /** Absolute path to the source rule file. Set by {@link loadRules}. */
+  filePath?: string;
 }
 
 /** Outcome of running a rule's {@link AgentRule.filter} command. */

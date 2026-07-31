@@ -31,7 +31,10 @@ cd "$ROOT"
 yarn build >/dev/null
 
 WORK="$(mktemp -d)"
-TARBALL="$(cd "$WORK" && npm pack "$ROOT" --silent)"
+# `npm pack` runs the package's `prepare` script (yarn build) before packing a
+# local-directory source; that build's own log lines land on the same stdout,
+# so only the last line is the actual tarball filename.
+TARBALL="$(cd "$WORK" && npm pack "$ROOT" --silent | tail -1)"
 echo "packed: $TARBALL"
 
 # Tarball must contain dist/ and must not contain src/.
@@ -47,16 +50,25 @@ mkdir -p "$PROJ"
 # Named exports resolve via the exports map.
 exports_ok="$(cd "$PROJ" && node --input-type=module -e '
   import * as m from "@casa/agent-rules";
-  const need = ["runReview","getDiff","matchGlob","matchGlobs","parseRuleFile","buildReviewPrompt","parseFindings"];
+  const need = [
+    "runReview","getDiff","matchGlob","matchGlobs","parseRuleFile","buildReviewPrompt","parseFindings",
+    "buildHookContext","toRepoRelativePath","mergeHookSettings","resolveTransport",
+  ];
   const missing = need.filter((n) => typeof m[n] !== "function");
   process.stdout.write(missing.length ? "missing:" + missing.join(",") : "ok");
 ')"
 check "named exports resolve" "ok" "$exports_ok"
 
-# The bin entry runs and reports the version.
+# The `agent-rules` bin entry runs and reports the version.
 version="$(cd "$PROJ" && node node_modules/.bin/agent-rules --version)"
 pkg_version="$(node -p "require('$ROOT/package.json').version")"
 check "bin --version" "$pkg_version" "$version"
+
+# The `agent-rules-hook` bin entry resolves and runs (no matching rule -> no output, exit 0).
+hook_out="$(cd "$PROJ" && echo '{"tool_name":"Read","tool_input":{"file_path":"x.ts"}}' | node node_modules/.bin/agent-rules-hook)"
+hook_code=$(cd "$PROJ" && echo '{"tool_name":"Read","tool_input":{"file_path":"x.ts"}}' | node node_modules/.bin/agent-rules-hook >/dev/null 2>&1; echo $?)
+check "agent-rules-hook bin resolves and exits 0" "0" "$hook_code"
+check "agent-rules-hook produces no output with no rules dir" "" "$hook_out"
 
 echo
 echo "pack-smoke: $PASS passed, $FAIL failed"
