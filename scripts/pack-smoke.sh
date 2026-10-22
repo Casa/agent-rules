@@ -31,18 +31,18 @@ cd "$ROOT"
 yarn build >/dev/null
 
 WORK="$(mktemp -d)"
-TARBALL="$(cd "$WORK" && npm pack "$ROOT" --silent)"
-echo "packed: $TARBALL"
+TARBALL_FILENAME="$(cd "$WORK" && npm pack "$ROOT" --json | node -e 'let d="";process.stdin.on("data",(c)=>{d+=c});process.stdin.on("end",()=>console.log(JSON.parse(d)[0].filename))')"
+echo "packed: $TARBALL_FILENAME"
 
 # Tarball must contain dist/ and must not contain src/.
-contents="$(tar -tzf "$WORK/$TARBALL")"
+contents="$(tar -tzf "$WORK/$TARBALL_FILENAME")"
 check "tarball ships dist/" "yes" "$(grep -q 'package/dist/index.js' <<<"$contents" && echo yes || echo no)"
 check "tarball excludes src/" "yes" "$(grep -q 'package/src/' <<<"$contents" && echo no || echo yes)"
 
 # Install into a throwaway ESM project.
 PROJ="$WORK/proj"
 mkdir -p "$PROJ"
-(cd "$PROJ" && npm init -y >/dev/null && npm install "$WORK/$TARBALL" --silent >/dev/null)
+(cd "$PROJ" && npm init -y >/dev/null && npm install "$WORK/$TARBALL_FILENAME" --silent >/dev/null)
 
 # Named exports resolve via the exports map.
 exports_ok="$(cd "$PROJ" && node --input-type=module -e '
