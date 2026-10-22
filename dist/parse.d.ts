@@ -15,8 +15,17 @@ export declare const FindingSchema: z.ZodArray<z.ZodObject<{
     impact: z.ZodDefault<z.ZodNumber>;
 }, z.core.$strip>>;
 /**
- * Extract a JSON array substring from model output. Strips markdown code fences
- * and any prose surrounding the array. Returns `null` if no array is found.
+ * Extract a JSON array substring from model output.
+ *
+ * Model results rarely arrive as a bare array: reasoning prose may contain
+ * stray brackets (array indexing like `devices.trezor.b[0]`, code spans like
+ * `keys ?? []`), and a first-'['→last-']' slice of such text fails JSON.parse,
+ * silently losing every finding in the session. This scanner instead walks '['
+ * candidates from the END of the text and returns the last span that parses as
+ * a JSON array, bracket-balanced and respecting JSON strings and escapes.
+ * Spans containing at least one object (the findings entries) win over bare
+ * fragments like `[0]` that also happen to parse. The candidate scan is bounded
+ * at {@link MAX_JSON_ARRAY_CANDIDATES}. Returns `null` if no array is found.
  */
 export declare function extractJsonArray(text: string): string | null;
 /**
