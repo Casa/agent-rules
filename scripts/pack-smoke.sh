@@ -31,7 +31,7 @@ cd "$ROOT"
 yarn build >/dev/null
 
 WORK="$(mktemp -d)"
-TARBALL_FILENAME="$(cd "$WORK" && npm pack "$ROOT" --json | node -e 'let d="";process.stdin.on("data",(c)=>{d+=c});process.stdin.on("end",()=>console.log(JSON.parse(d)[0].filename))')"
+TARBALL_FILENAME="$(cd "$WORK" && npm pack "$ROOT" --silent | tail -n1)"
 echo "packed: $TARBALL_FILENAME"
 
 # Tarball must contain dist/ and must not contain src/.
